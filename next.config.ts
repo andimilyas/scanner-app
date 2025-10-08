@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'apps.rsudpasarrebo.id',
+        port: '',
+        pathname: '/img/**',
+      },
+    ],
+  },
   // Security headers
   async headers() {
     return [

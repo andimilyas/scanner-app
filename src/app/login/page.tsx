@@ -30,20 +30,20 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     setFormError("");
-    
+
     // Clear sensitive data from form after submission
     const formData = { no_absen: no_absen, password };
-    
+
     try {
       const response = await fetch("/api/login", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "X-Requested-With": "XMLHttpRequest" // Add security header
         },
         body: JSON.stringify(formData),
       });
-      
+
       let result;
       try {
         result = await response.json();
@@ -52,7 +52,7 @@ export default function LoginPage() {
         setFormError("Terjadi kesalahan pada server. Silakan coba lagi.");
         return;
       }
-      
+
       if (result.success) {
         setIsLoggedIn(true);
         setUser(result.user);
@@ -95,6 +95,8 @@ export default function LoginPage() {
           <Image
             src="https://apps.rsudpasarrebo.id/img/logo.png"
             alt="RSUD Pasar Rebo Logo"
+            width={152}
+            height={152}
             className="w-38 h-38"
             style={{ objectFit: "contain" }}
           />
@@ -175,11 +177,10 @@ export default function LoginPage() {
           )}
           <button
             type="submit"
-            className={`w-full py-3 px-4 font-semibold rounded-xl transition-colors ${
-              isLoading
+            className={`w-full py-3 px-4 font-semibold rounded-xl transition-colors ${isLoading
                 ? "bg-indigo-400 text-white cursor-not-allowed"
                 : "bg-indigo-600 text-white hover:bg-indigo-700"
-            }`}
+              }`}
             disabled={isLoading}
           >
             {isLoading ? (
