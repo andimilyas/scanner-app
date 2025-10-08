@@ -70,9 +70,25 @@ export default function HomePage() {
           }}
         >
           <div className="relative z-10 flex flex-col items-center justify-center w-full h-full p-0">
-            <h2 className="text-lg sm:text-2xl font-bold text-white mt-2 mb-1 drop-shadow text-center">
-              Halo, Selamat Datang!
-            </h2>
+            {(() => {
+              const now = new Date();
+              const hour = now.getHours();
+              let greeting = "Selamat Pagi";
+              if (hour >= 4 && hour < 11) {
+                greeting = "Selamat Pagi";
+              } else if (hour >= 11 && hour < 15) {
+                greeting = "Selamat Siang";
+              } else if (hour >= 15 && hour < 18) {
+                greeting = "Selamat Sore";
+              } else {
+                greeting = "Selamat Malam";
+              }
+              return (
+                <h2 className="text-lg sm:text-2xl font-bold text-white mt-2 mb-1 drop-shadow text-center">
+                  Halo, {greeting}!
+                </h2>
+              );
+            })()}
             {user?.name && (
               <div className="text-white text-base font-medium text-center">
                 {user.name}

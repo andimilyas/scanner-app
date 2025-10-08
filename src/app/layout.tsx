@@ -2,7 +2,7 @@ import "./globals.css";
 import { AppProvider } from "./context/AppContext"
 
 export const metadata = {
-  title: "Sistem Validasi Resep",
+  title: "Scanner Apotek",
   description: "Aplikasi Scanner Apotek",
 };
 

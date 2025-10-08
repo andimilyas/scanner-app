@@ -6,7 +6,7 @@ import { useApp } from "@/app/context/AppContext";
 import { useRouter } from "next/navigation";
 
 function HistoryPage() {
-  const { isLoggedIn, isHydrated, user } = useApp();
+  const { isLoggedIn, isHydrated } = useApp();
   const router = useRouter();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

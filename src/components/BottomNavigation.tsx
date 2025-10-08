@@ -25,16 +25,17 @@ const BottomNavigation: React.FC = () => {
           className="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition"
         >
           <Home className="h-7 w-7 mb-1" />
-          <span className="text-xs font-medium">Home</span>
+          <span className="text-xs font-medium">Beranda</span>
         </button>
 
         {/* Scan (center, prominent) */}
         <button
           onClick={handleDrawerOpen}
-          className="relative -mt-8 bg-indigo-600 rounded-full aspect-square w-20 h-20 shadow-lg border-4 border-white flex flex-col items-center justify-center text-white hover:bg-indigo-700 transition"
+          className="relative -mt-8 bg-indigo-600 rounded-full aspect-square w-20 h-20 p-3 shadow-lg border-4 border-white flex flex-col items-center justify-center text-white hover:bg-indigo-700 transition "
           style={{ boxShadow: "0 4px 16px rgba(99,102,241,0.15)" }}
         >
           <QrCode size={48} />
+          <span className="text-xs font-medium">Scan</span>
         </button>
 
         {/* Profile */}
@@ -46,8 +47,8 @@ const BottomNavigation: React.FC = () => {
             <circle cx="12" cy="9" r="3" strokeWidth={2} />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 19c0-2.5 2.5-4 6-4s6 1.5 6 4" />
           </svg>
-          <span className="text-xs font-medium">Profil</span>
-        </button>
+          <span className="text-xs font-medium">Akun</span>
+        </button>        
 
         <Drawer
           anchor="bottom"
@@ -79,7 +80,7 @@ const BottomNavigation: React.FC = () => {
             </span>
             <div className="flex flex-col items-start">
               <span className="font-semibold text-indigo-700">Validasi Kemasan Resep</span>
-              <span className="text-xs text-gray-500">Pindai barcode kemasan obat untuk verifikasi resep.</span>
+              <span className="text-xs text-gray-500 text-left">Pindai barcode kemasan obat untuk verifikasi resep.</span>
             </div>
           </button>
           <button
@@ -97,7 +98,7 @@ const BottomNavigation: React.FC = () => {
             </span>
             <div className="flex flex-col items-start">
               <span className="font-semibold text-green-700">Pemberian Obat ke Pasien</span>
-              <span className="text-xs text-gray-500">Pindai kode pasien/resep untuk mencatat pemberian.</span>
+              <span className="text-xs text-gray-500 text-left">Pindai kode pasien/resep untuk mencatat pemberian.</span>
             </div>
           </button>
         </div>

@@ -91,10 +91,15 @@ export default function LoginPage() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl">
         <div className="flex flex-col items-center mb-6">
-          <QrCode className="text-indigo-600 mb-2" size={48} />
+          <img
+            src="https://apps.rsudpasarrebo.id/img/logo.png"
+            alt="RSUD Pasar Rebo Logo"
+            className="w-38 h-38"
+            style={{ objectFit: "contain" }}
+          />
           <div className="flex flex-col items-center justify-center w-full text-center">
-            <h2 className="text-3xl font-bold text-gray-800">Sistem Validasi Resep</h2>
-            <p className="text-sm text-gray-500 mt-1">Masuk untuk memulai proses scanning.</p>
+            <h2 className="text-3xl font-bold text-gray-800">Selamat Datang</h2>
+            <p className="text-sm text-gray-500 mt-1 mb-8">Masuk untuk memulai proses scanning.</p>
           </div>
         </div>
         <form
@@ -130,7 +135,7 @@ export default function LoginPage() {
                 setFormError("");
               }}
               className={`w-full p-3 border rounded-xl text-black ${formError && formError.includes("No Absen") ? "border-red-500" : ""}`}
-              placeholder="****"
+              placeholder="1234"
               required
               inputMode="numeric"
               pattern="\d{4}"
@@ -154,7 +159,7 @@ export default function LoginPage() {
                 setFormError("");
               }}
               className={`w-full p-3 border rounded-xl text-black ${formError && formError.includes("Password") ? "border-red-500" : ""}`}
-              placeholder="******"
+              placeholder="********"
               required
               autoComplete="off"
             />
@@ -205,6 +210,10 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+      </div>
+      <div className="mt-12 flex flex-col items-center text-gray-400 text-xs">
+        <span>Scanner Apotek</span>
+        <span className="mt-1">v1.0.0</span>
       </div>
     </div>
   );

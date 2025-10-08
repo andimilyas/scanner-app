@@ -4,6 +4,7 @@ import Header from "@/components/header";
 import { useApp } from "@/app/context/AppContext";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import BottomNavigation from "@/components/BottomNavigation";
 
 const ScannerPage: React.FC = () => {
   const searchParams = useSearchParams();
@@ -14,7 +15,7 @@ const ScannerPage: React.FC = () => {
   const [scanError, setScanError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
-  const [lastScanData, setLastScanData] = useState<{result: string, mode: string} | null>(null);
+  const [lastScanData, setLastScanData] = useState<{ result: string, mode: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false); // Loading state
 
   // Reset states when mode changes
@@ -43,7 +44,7 @@ const ScannerPage: React.FC = () => {
     }
   }, []);
 
-  // Add missing dependencies to useCallback
+  // Update handleScan to display error messages immediately
   const handleScan = useCallback(async (data: string) => {
     setIsLoading(true); // Activate loading state
 
@@ -76,18 +77,19 @@ const ScannerPage: React.FC = () => {
           }
         }
 
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem("scan_error", errorMsg);
-        }
+        setScanError(errorMsg); // Display error immediately
+        return; // Stop further processing
       }
+
+      setScanSuccess(true);
+      setLastScanData({ result: data, mode: mode as string });
     } catch (err) {
       console.error("Failed to send scan data:", err);
+      setScanError("Terjadi kesalahan pada server. Silakan coba lagi.");
     } finally {
       setIsLoading(false); // Deactivate loading state
     }
-
-    router.push("/home");
-  }, [mode, user, router, setScanMode, setScanResult]);
+  }, [mode, user, setScanMode, setScanResult]);
 
   const handleRetryScan = () => {
     setScanError(null);
@@ -102,10 +104,10 @@ const ScannerPage: React.FC = () => {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
       });
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -205,20 +207,23 @@ const ScannerPage: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-900">
-      <Header
-        title={mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
-        showBack={true}
-        isLoggedIn={isLoggedIn}
-        currentPage="scanner"
-        handleLogout={handleLogout}
-      />
-      
-      <div className="flex-grow flex flex-col items-center justify-center p-4">
-        {/* Camera View */}
+      {/* Header selalu muncul di atas kamera */}
+      <div className="relative z-50">
+        <Header
+          title={mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
+          showBack={true}
+          isLoggedIn={isLoggedIn}
+          currentPage="scanner"
+        />
+      </div>
+
+      {/* Camera and overlays */}
+      <div className="relative flex-1 w-full">
+        {/* Camera View - Fullscreen */}
         {!scanSuccess && (
           <video
             ref={videoRef}
-            className="w-full max-w-md rounded-lg shadow-lg transition-opacity duration-300"
+            className="fixed inset-0 w-full h-full object-cover z-0"
             autoPlay
             muted
             playsInline
@@ -237,79 +242,102 @@ const ScannerPage: React.FC = () => {
 
         {/* Error Message */}
         {scanError && (
-          <div className="w-full max-w-md p-4 mt-6 border-l-4 border-red-500 bg-red-50 rounded-xl shadow-md relative animate-fade-in">
-            <button
-              type="button"
-              aria-label="Tutup"
-              className="absolute top-2 right-2 text-red-400 hover:text-red-600 rounded-full p-1 transition"
-              onClick={handleRetryScan}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <p className="font-semibold text-red-700 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" />
-              </svg>
-              Scan Gagal
-            </p>
-            <p className="text-sm text-red-600 mt-1">{scanError}</p>
-            <button
-              onClick={handleRetryScan}
-              className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-            >
-              Coba Lagi
-            </button>
+          <div className="fixed top-4 left-0 w-full flex justify-center mt-16 z-50">
+            <div className="w-full max-w-md mx-4 p-4 border-l-4 border-red-500 bg-red-50 rounded-xl shadow-md relative animate-fade-in">
+              <button
+                type="button"
+                aria-label="Tutup"
+                className="absolute top-2 right-2 text-red-400 hover:text-red-600 rounded-full p-1 transition"
+                onClick={handleRetryScan}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <p className="font-semibold text-red-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z" />
+                </svg>
+                Scan Gagal
+              </p>
+              <p className="text-sm text-red-600 mt-1">{scanError}</p>
+              <button
+                onClick={handleRetryScan}
+                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+              >
+                Coba Lagi
+              </button>
+            </div>
           </div>
         )}
 
         {/* Success Message */}
         {scanSuccess && lastScanData && (
-          <div className="w-full max-w-md p-6 mt-6 border-l-4 border-green-500 bg-green-50 rounded-xl shadow-md animate-fade-in">
-            <div className="flex items-center gap-3 mb-3">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="font-semibold text-green-700 text-lg">
-                {lastScanData.mode === "validation" ? "Validasi Berhasil!" : "Pemberian Obat Berhasil!"}
+          <div className="fixed bottom-0 left-0 w-full flex justify-center mb-8 z-50">
+            <div className="w-full max-w-md mx-4 p-6 border-l-4 border-green-500 bg-green-50 rounded-xl shadow-md animate-fade-in">
+              <div className="flex items-center gap-3 mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 9 0z" />
+                </svg>
+                <p className="font-semibold text-green-700 text-lg">
+                  {lastScanData.mode === "validation" ? "Validasi Berhasil!" : "Pemberian Obat Berhasil!"}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-3 mt-2">
+                <p className="text-sm text-gray-600">Kode Scan:</p>
+                <p className="font-mono text-sm bg-gray-100 p-2 rounded mt-1 break-all">
+                  {lastScanData.result}
+                </p>
+              </div>
+              <p className="text-green-600 mt-3 flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                Mengarahkan ke beranda...
               </p>
             </div>
-            
-            <div className="bg-white rounded-lg p-3 mt-2">
-              <p className="text-sm text-gray-600">Kode Scan:</p>
-              <p className="font-mono text-sm bg-gray-100 p-2 rounded mt-1 break-all">
-                {lastScanData.result}
-              </p>
-            </div>
-            
-            <p className="text-green-600 mt-3 flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-              Mengarahkan ke beranda...
-            </p>
           </div>
         )}
 
-        {/* Scan Result Display (Non-blocking) */}
+        {/* Scan Result */}
         {scanResult && !scanError && !scanSuccess && (
-          <div className={`w-full max-w-md p-4 mt-6 border-l-4 ${
-            scanMode === "validation" ? "border-indigo-500 bg-indigo-50" : "border-green-500 bg-green-50"
-          } rounded-xl shadow-md transition-all duration-300`}>
-            <p className="font-semibold text-gray-800">
-              Hasil Scan ({scanMode === "validation" ? "Validasi" : "Pemberian"}):
-            </p>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 mt-1 break-all">
-              {scanResult}
-            </span>
-            <p className="text-sm font-bold text-green-700 mt-2">
-              {scanMode === "validation" 
-                ? "Memproses validasi kemasan..." 
-                : "Memproses pemberian obat..."}
-            </p>
+          <div className="fixed top-4 left-0 w-full flex justify-center mt-16 z-40">
+            <div
+              className={`relative w-full max-w-md mx-4 p-4 border-l-4 ${scanMode === "validation"
+                  ? "border-indigo-500 bg-indigo-50"
+                  : "border-green-500 bg-green-50"
+                } rounded-xl shadow-md transition-all duration-300`}
+            >
+              {/* Tombol Close */}
+              <button
+                onClick={() => {
+                  // Clear scan result (assuming setScanResult exists in scope)
+                  setScanResult(null);
+                }}
+                className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-200 transition"
+                aria-label="Tutup"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <p className="font-semibold text-gray-800">
+                Hasil Scan Terakhir ({scanMode === "validation" ? "Validasi" : "Pemberian"}):
+              </p>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 mt-1 break-all">
+                {scanResult}
+              </span>
+              <p className="text-sm font-bold text-green-700 mt-2">
+                {scanMode === "validation"
+                  ? "Validasi Berhasil: Kemasan Sesuai!"
+                  : "Pemberian Obat Berhasil: Data Tersimpan!"}
+              </p>
+            </div>
           </div>
         )}
       </div>
+
+      <BottomNavigation />
     </div>
+
   );
 };
 

@@ -38,12 +38,13 @@ export function AppProvider({ children }: AppProviderProps) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
 
+  // Ensure hydration completes even if session restoration fails
   useEffect(() => {
     const initializeApp = () => {
-      const savedSession = sessionStorage.getItem('scanner_app_session');
-      
-      if (savedSession) {
-        try {
+      try {
+        const savedSession = sessionStorage.getItem('scanner_app_session');
+
+        if (savedSession) {
           const sessionData = JSON.parse(savedSession);
           const SESSION_EXPIRY = 8 * 60 * 60 * 1000;
 
@@ -52,7 +53,6 @@ export function AppProvider({ children }: AppProviderProps) {
             sessionStorage.removeItem('scanner_app_session');
             setIsLoggedIn(false);
           } else if (sessionData.isLoggedIn && sessionData.user) {
-            // SET STATE SEKALIGUS SEBELUM HYDRATION COMPLETE
             setIsLoggedIn(true);
             setUser(sessionData.user);
             if (sessionData.scanResult) setScanResult(sessionData.scanResult);
@@ -61,15 +61,17 @@ export function AppProvider({ children }: AppProviderProps) {
           } else {
             setIsLoggedIn(false);
           }
-        } catch (error) {
-          console.error('Error loading session:', error);
-          sessionStorage.removeItem('scanner_app_session');
+        } else {
           setIsLoggedIn(false);
-        } finally {
-          setIsLoading(false);
-          setIsHydrated(true);
         }
-      }       
+      } catch (error) {
+        console.error('Error loading session:', error);
+        sessionStorage.removeItem('scanner_app_session');
+        setIsLoggedIn(false);
+      } finally {
+        setIsLoading(false);
+        setIsHydrated(true); // Ensure hydration completes
+      }
     };
 
     initializeApp();

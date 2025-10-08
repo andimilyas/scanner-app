@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       recordLoginAttempt(clientIP, true);
       
       // Remove password from response for security
-      const { password: _, ...userWithoutPassword } = user;
+      const { password, ...userWithoutPassword } = user;
       return NextResponse.json({ 
         success: true, 
         user: userWithoutPassword 
