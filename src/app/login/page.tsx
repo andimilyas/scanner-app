@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { QrCode } from "lucide-react";
 import { useApp } from "@/app/context/AppContext";
+import Image from "next/image";
 
 export default function LoginPage() {
   const { setIsLoggedIn, setScanResult, setUser, isHydrated, isLoggedIn } = useApp();
@@ -48,6 +48,7 @@ export default function LoginPage() {
       try {
         result = await response.json();
       } catch (err) {
+        console.error("Failed to parse JSON response:", err);
         setFormError("Terjadi kesalahan pada server. Silakan coba lagi.");
         return;
       }
@@ -91,7 +92,7 @@ export default function LoginPage() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl">
         <div className="flex flex-col items-center mb-6">
-          <img
+          <Image
             src="https://apps.rsudpasarrebo.id/img/logo.png"
             alt="RSUD Pasar Rebo Logo"
             className="w-38 h-38"

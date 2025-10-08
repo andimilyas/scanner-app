@@ -5,10 +5,18 @@ import BottomNavigation from "@/components/BottomNavigation";
 import { useApp } from "@/app/context/AppContext";
 import { useRouter } from "next/navigation";
 
+interface HistoryItem {
+  id?: string;
+  code: string;
+  mode: "validation" | "medication";
+  timestamp: string;
+  user?: string;
+}
+
 function HistoryPage() {
   const { isLoggedIn, isHydrated } = useApp();
   const router = useRouter();
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Redirect to login if not authenticated (only after hydration)
@@ -31,6 +39,7 @@ function HistoryPage() {
           setHistory([]);
         }
       } catch (err) {
+        console.error("Error fetching history:", err);
         setHistory([]);
       }
       setLoading(false);

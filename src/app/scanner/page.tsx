@@ -3,14 +3,24 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Header from "@/components/header";
 import { useApp } from "@/app/context/AppContext";
 import { BrowserMultiFormatReader } from "@zxing/browser";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 
-const ScannerPage: React.FC = () => {
+export default function ScannerPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+    </div>}>
+      <ScannerContent />
+    </Suspense>
+  );
+}
+
+const ScannerContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode");
-  const { scanResult, scanMode, setScanResult, setScanMode, user, isLoggedIn, logout, isHydrated } = useApp();
+  const { scanResult, scanMode, setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -116,11 +126,6 @@ const ScannerPage: React.FC = () => {
       console.error("Camera error:", err);
       setScanError("Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.");
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    router.push("/login");
   };
 
   // Ensure useEffect is unconditional
@@ -340,5 +345,3 @@ const ScannerPage: React.FC = () => {
 
   );
 };
-
-export default ScannerPage;
