@@ -124,7 +124,18 @@ const ScannerContent: React.FC = () => {
       }
     } catch (err) {
       console.error("Camera error:", err);
-      setScanError("Tidak dapat mengakses kamera. Pastikan izin kamera sudah diberikan.");
+
+      if (err instanceof Error) {
+        if (err.name === "NotAllowedError") {
+          setScanError("Akses kamera ditolak. Pastikan izin kamera diberikan di browser.");
+        } else if (err.name === "NotFoundError") {
+          setScanError("Kamera tidak ditemukan. Pastikan perangkat memiliki kamera yang tersedia.");
+        } else {
+          setScanError("Tidak dapat mengakses kamera. Silakan coba lagi.");
+        }
+      } else {
+        setScanError("Terjadi kesalahan yang tidak diketahui saat mengakses kamera.");
+      }
     }
   };
 

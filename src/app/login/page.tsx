@@ -93,7 +93,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl">
         <div className="flex flex-col items-center mb-6">
           <Image
-            src="https://apps.rsudpasarrebo.id/img/logo.png"
+            src="/asset/logo/rs.svg"
             alt="RSUD Pasar Rebo Logo"
             width={152}
             height={152}

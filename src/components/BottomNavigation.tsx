@@ -56,13 +56,17 @@ const BottomNavigation: React.FC = () => {
           onClose={handleDrawerClose}
           PaperProps={{
             sx: {
+              width: "100%",
+              maxWidth: "32rem",
+              marginLeft: "auto",
+              marginRight: "auto",
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
             },
           }}
         >
         {/* Isi drawer di sini */}
-        <div className="w-full px-4 py-4">
+        <div className="w-full max-w-lg mx-auto px-4 py-4">
           <div className="w-12 h-1 rounded-full bg-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold mb-2 text-gray-800">Pilih Mode Pemindaian</h3>
           <button
