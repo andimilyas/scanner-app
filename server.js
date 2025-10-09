@@ -18,6 +18,11 @@ const httpsOptions = {
 app.prepare().then(() => {
   createServer(httpsOptions, (req, res) => {
     const parsedUrl = parse(req.url, true);
+    
+    // Add security headers yang allow camera
+    res.setHeader('Permissions-Policy', 'camera=(self)');
+    res.setHeader('Feature-Policy', 'camera self');
+    
     handle(req, res, parsedUrl);
   }).listen(port, hostname, (err) => {
     if (err) throw err;
