@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:https": "next dev --https --key ./certificates/localhost.key --cert ./certificates/localhost.crt",
-    "dev:linux": "HTTPS=true SSL_CRT_FILE=./certificates/localhost.crt SSL_KEY_FILE=./certificates/localhost.key next dev",
+    "start:https": "HTTPS=true SSL_CRT_FILE=ssl/server.crt SSL_KEY_FILE=ssl/server.key next start",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint"
