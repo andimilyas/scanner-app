@@ -4,9 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "start:https": "HTTPS=true SSL_CRT_FILE=ssl/server.crt SSL_KEY_FILE=ssl/server.key next start",
     "build": "next build --turbopack",
-    "start": "next start",
+    "start": "node server.ts",
     "lint": "eslint"
   },
   "dependencies": {
