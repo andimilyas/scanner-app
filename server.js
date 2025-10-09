@@ -16,10 +16,10 @@ const httpsOptions = {
 };
 
 app.prepare().then(() => {
-  createServer(httpsOptions, (req: { url: any; }, res: any) => {
+  createServer(httpsOptions, (req, res) => {
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
-  }).listen(port, hostname, (err: any) => {
+  }).listen(port, hostname, (err) => {
     if (err) throw err;
     console.log(`> Ready on https://${hostname}:${port}`);
   });
