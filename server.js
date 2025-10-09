@@ -12,21 +12,25 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 const httpsOptions = {
-  key: fs.readFileSync('/etc/ssl/certs/_.rsudpasarrebo.id.key'), // PAKAI SSL YANG VALID
-  cert: fs.readFileSync('/etc/ssl/certs/_.rsudpasarrebo.id.crt'), // PAKAI SSL YANG VALID
+  key: fs.readFileSync('/etc/ssl/certs/_.rsudpasarrebo.id.key'), 
+  cert: fs.readFileSync('/etc/ssl/certs/_.rsudpasarrebo.id.crt'), 
 };
 
 app.prepare().then(() => {
   createServer(httpsOptions, (req, res) => {
     const parsedUrl = parse(req.url, true);
-    
-    // SET HEADER YANG BENAR - gabung semua dalam satu line
-    res.setHeader('Permissions-Policy', 'camera=(self), microphone=()');
-    res.setHeader('Feature-Policy', 'camera self');
-    
+
+    // Set security headers
+    res.setHeader('Permissions-Policy', 'camera=(self)');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
+
     handle(req, res, parsedUrl);
   }).listen(port, hostname, (err) => {
-    if (err) throw err;
+    if (err) {
+      console.error('Server startup error:', err);
+      process.exit(1);
+    }
     console.log(`> Ready on https://${hostname}:${port}`);
   });
 });
