@@ -18,8 +18,20 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         headers: [
           {
+            key: 'Permissions-Policy',
+            value: 'camera=(self "https://10.0.10.12:5002"); microphone=(); geolocation=()',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; img-src 'self' https:; media-src 'self' blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+          },
+          {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
+          },
+           {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains',
           },
           {
             key: 'X-Frame-Options',
