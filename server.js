@@ -21,7 +21,11 @@ app.prepare().then(() => {
     const parsedUrl = parse(req.url, true);
 
     // Set security headers
-    res.setHeader('Permissions-Policy', 'camera=(self)');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(self "https://10.0.10.12:5002"); microphone=(); geolocation=()'
+    );
+    
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' https:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'");
 
