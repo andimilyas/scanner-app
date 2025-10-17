@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     const result = await pool.request()
       .input("no_absen", sanitizedNoAbsen)
       .query(`
-        SELECT * FROM users 
+        SELECT * FROM USER_MANAJEMEN.dbo.users 
         WHERE no_absen = @no_absen
       `);
 

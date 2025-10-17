@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Permissions-Policy',
-            value: 'camera=(self "https://10.0.10.12:5002"); microphone=(); geolocation=()',
+            value: 'camera=(); microphone=(); geolocation=()',
           },
           {
             key: 'Content-Security-Policy',
@@ -48,6 +48,17 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+
+  experimental: {
+    serverActions: {
+      allowedOrigins: [
+        "https://qr.rsudpasarrebo.id", // domain publik (IIS terminates TLS)
+        "http://10.0.10.12:5002",              // origin internal kamu
+        "http://localhost:5002",                // dev (opsional)
+        "http://127.0.0.1:5002",                // dev (opsional)
+      ],
+    },
   },
   
   // Hide Next.js version and other sensitive info
