@@ -29,6 +29,7 @@ const ScannerContent: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [cameraStarted, setCameraStarted] = useState(false);
   const [availableCameras, setAvailableCameras] = useState<{ id: string; label: string }[]>([]);
+  const [showActions, setShowActions] = useState(false);
 
   const html5QrcodeRef = useRef<Html5Qrcode | null>(null);
   const isMountedRef = useRef(true);
@@ -162,7 +163,7 @@ const ScannerContent: React.FC = () => {
           setIsLoading(false);
         };
         reader.readAsDataURL(file);
-        } catch {
+      } catch {
         setScanError("Gagal memproses gambar yang diupload.");
         setIsLoading(false);
       }
@@ -380,61 +381,93 @@ const ScannerContent: React.FC = () => {
           </span>
         </div>
         {/* Action Buttons */}
-        <div className="flex gap-1 items-center">
-          {/* Upload Button */}
-          <label className="p-2 rounded-full hover:bg-black/10 transition cursor-pointer flex items-center">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (typeof handleImageUpload === "function") handleImageUpload(e);
-                }
-                e.target.value = "";
-              }}
-              aria-label="Unggah Gambar"
-            />
-            {/* Upload/Photo SVG */}
-            <svg
-              width="22"
-              height="22"
-              fill="none"
-              stroke="white"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              viewBox="0 0 24 24"
-            >
-              <rect x="3" y="5" width="18" height="14" rx="2.5" />
-              <circle cx="12" cy="13" r="3" />
-              <path d="M15.5 8.5h.01" />
-            </svg>
-          </label>
-          {/* Flashlight Button */}
+        {/* Tombol Menu Titik Tiga */}
+        <div className="relative">
           <button
-            className={`p-2 rounded-full flex items-center justify-center hover:bg-black/10 transition ${flashOn ? "bg-yellow-400/20" : ""}`}
-            aria-label="Toggle Flashlight"
-            onClick={() => {
-              if (typeof toggleFlash === "function") toggleFlash();
-            }}
+            className="p-2 rounded-full hover:bg-black/10 transition"
+            aria-label="Menu Aksi"
+            onClick={() => setShowActions(prev => !prev)}
+            type="button"
           >
-            {/* Flash SVG, colored if on */}
-            <svg
-              width="23"
-              height="23"
-              viewBox="0 0 24 24"
-              fill={flashOn ? "#fde047" : "none"}
-              stroke={flashOn ? "#fde047" : "white"}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M7 2v11h3v9l7-12h-4l4-8z" />
+            {/* Icon Titik Tiga */}
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
             </svg>
           </button>
+          {/* Action Buttons Popover */}
+          {showActions && (
+            <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg z-50 py-2 w-44 flex flex-col">
+              <button
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-gray-800 text-sm"
+                onClick={() => {
+                  setShowActions(false);
+                  if (typeof toggleFlash === "function") toggleFlash();
+                }}
+                type="button"
+              >
+                {/* Flash Icon */}
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill={flashOn ? "#fde047" : "none"}
+                  stroke={flashOn ? "#fde047" : "#222"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="mr-1"
+                >
+                  <path d="M7 2v11h3v9l7-12h-4l4-8z" />
+                </svg>
+                {flashOn ? "Matikan Flash" : "Nyalakan Flash"}
+              </button>
+              <label
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-gray-800 text-sm cursor-pointer"
+                htmlFor="upload-image-action"
+                onClick={() => setShowActions(false)}
+              >
+                {/* Upload/Photo SVG */}
+                <svg
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="#222"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  viewBox="0 0 24 24"
+                  className="mr-1"
+                >
+                  <rect x="3" y="5" width="18" height="14" rx="2.5" />
+                  <circle cx="12" cy="13" r="3" />
+                  <path d="M15.5 8.5h.01" />
+                </svg>
+                Unggah Gambar
+                <input
+                  id="upload-image-action"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (typeof handleImageUpload === "function") handleImageUpload(e);
+                    }
+                    e.target.value = "";
+                  }}
+                  aria-label="Unggah Gambar"
+                  tabIndex={-1}
+                />
+              </label>
+            </div>
+          )}
         </div>
+      </div>
+      {/* Petunjuk/scanner helper di bawah header */}
+      <div className="w-full absolute top-0 text-white text-xs px-3 py-1 rounded-md font-medium shadow text-center" style={{ marginTop: 100, zIndex: 30 }}>
+        Arahkan barcode ke dalam kotak
       </div>
       <div className="flex-1 relative overflow-hidden">
         <div
@@ -450,10 +483,6 @@ const ScannerContent: React.FC = () => {
               className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
               style={{ width: 280, height: 280 }} // Increased size
             >
-              <div className="w-full absolute top-0 text-white text-xs px-3 py-1 rounded-md font-medium shadow text-center">
-              Arahkan barcode ke dalam kotak
-            </div>
-
               {/* Garis scan animasi */}
               <div
                 className="absolute left-0 right-0 h-1 bg-gradient-to-r from-indigo-400 via-indigo-300 to-indigo-400 shadow-md rounded"
@@ -472,7 +501,7 @@ const ScannerContent: React.FC = () => {
                 }
               }
             `}</style>
-            </div>            
+            </div>
           </div>
 
         )}
@@ -550,8 +579,8 @@ const ScannerContent: React.FC = () => {
         )}
 
         {cameraStarted && !scanSuccess && (
-          <div className="absolute bottom-30 left-0 right-0 flex justify-center items-center z-40 px-4">
-            <div className="w-full max-w-md flex bg-white rounded-xl p-1 shadow-md">
+          <div className="absolute left-0 right-0 bottom-28 flex justify-center items-center z-40 px-4">
+            <div className="w-full max-w-xs flex bg-white rounded-lg p-0.5 shadow">
               <button
                 onClick={() => {
                   if (scanMode !== "validation") {
@@ -559,9 +588,9 @@ const ScannerContent: React.FC = () => {
                     router.push("/scanner?mode=validation");
                   }
                 }}
-                className={`flex-1 py-3 font-semibold text-base transition-all duration-200 ${scanMode === "validation"
-                    ? "bg-indigo-600 text-white rounded-xl"
-                    : "text-indigo-600"
+                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${scanMode === "validation"
+                  ? "bg-indigo-600 text-white rounded-lg"
+                  : "text-indigo-600"
                   }`}
               >
                 Validasi
@@ -573,9 +602,9 @@ const ScannerContent: React.FC = () => {
                     router.push("/scanner?mode=dispensing");
                   }
                 }}
-                className={`flex-1 py-3 font-semibold text-base transition-all duration-200 ${scanMode === "dispensing"
-                    ? "bg-indigo-600 text-white rounded-xl"
-                    : "text-indigo-600"
+                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${scanMode === "dispensing"
+                  ? "bg-indigo-600 text-white rounded-lg"
+                  : "text-indigo-600"
                   }`}
               >
                 Pemberian
