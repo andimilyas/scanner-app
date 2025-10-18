@@ -21,7 +21,8 @@ const ScannerContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode");
-  const { scanResult, scanMode, setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
+  // omit scanResult since it's not used in this component
+  const { scanMode, setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   const [lastScanData, setLastScanData] = useState<{ result: string, mode: string } | null>(null);
@@ -44,21 +45,41 @@ const ScannerContent: React.FC = () => {
     if (html5QrcodeRef.current) {
       // html5-qrcode supports controlling the torch via setTorchOn if implemented
       // See https://github.com/mebjas/html5-qrcode/issues/433
-      // html5QrcodeRef.current.getRunningTrackSettings() is non-standard API and may need feature detection
+      // Use runtime type narrowing and a small helper to avoid 'any' lint warnings
       try {
-        // Enable or disable the torch if the track supports it (on Chrome/Android)
-        const tracks = (html5QrcodeRef.current as any)?.getRunningTrackSettings?.();
-        const videoTrack = (html5QrcodeRef.current as any)?.getRunningTrack?.();
-        if (videoTrack && typeof videoTrack.applyConstraints === "function") {
-          videoTrack.applyConstraints({
-            advanced: [{ torch: !flashOn }],
-          });
+        const runtime = html5QrcodeRef.current as unknown as {
+          getRunningTrackSettings?: () => unknown;
+          getRunningTrack?: () => MediaStreamTrack | null | undefined;
+        };
+        const videoTrack = runtime.getRunningTrack?.();
+        if (videoTrack && typeof (videoTrack as MediaStreamTrack).applyConstraints === "function") {
+          // applyConstraints expects a MediaTrackConstraints; torch is not standard in types,
+          // but some browsers support it via advanced constraints — use a cast just for this call.
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (videoTrack as any).applyConstraints({ advanced: [{ torch: !flashOn }] });
+          } catch {
+            // ignore failures applying torch constraint
+          }
         }
-      } catch (e) {
+      } catch {
         // Torch toggle failed or not supported
       }
     }
   }, [flashOn]);
+
+  const stopCamera = useCallback(async () => {
+    if (html5QrcodeRef.current && isMountedRef.current) {
+      try {
+        await html5QrcodeRef.current.stop();
+      } catch {
+        // Ignore stop errors during cleanup
+      } finally {
+        html5QrcodeRef.current = null;
+      }
+    }
+    setCameraStarted(false);
+  }, []);
 
   const handleScan = useCallback(async (data: string) => {
     if (!isMountedRef.current || isLoading || scanSuccess || scanInProgressRef.current) return;
@@ -99,14 +120,14 @@ const ScannerContent: React.FC = () => {
 
       // Stop scanner after successful scan
       await stopCamera();
-    } catch (err) {
-      console.error("Failed to send scan data:", err);
+    } catch {
+      console.error("Failed to send scan data");
       setScanError("Terjadi kesalahan pada server. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
       scanInProgressRef.current = false;
     }
-  }, [mode, user, setScanMode, setScanResult, isLoading, scanSuccess]);
+  }, [mode, user, setScanMode, setScanResult, isLoading, scanSuccess, stopCamera]);
 
   // For handling image file uploads
   const handleImageUpload = useCallback(
@@ -134,14 +155,14 @@ const ScannerContent: React.FC = () => {
                 const result = await html5Qr.scanFile(file, true);
                 handleScan(result);
               }
-            } catch (err: any) {
+            } catch {
               setScanError("Tidak dapat membaca kode dari gambar.");
             }
           }
           setIsLoading(false);
         };
         reader.readAsDataURL(file);
-      } catch (err) {
+        } catch {
         setScanError("Gagal memproses gambar yang diupload.");
         setIsLoading(false);
       }
@@ -174,20 +195,7 @@ const ScannerContent: React.FC = () => {
   }, [scanSuccess, router]);
 
 
-  const stopCamera = async () => {
-    if (html5QrcodeRef.current && isMountedRef.current) {
-      try {
-        await html5QrcodeRef.current.stop();
-      } catch (err) {
-        // Ignore stop errors during cleanup
-      } finally {
-        html5QrcodeRef.current = null;
-      }
-    }
-    setCameraStarted(false);
-  };
-
-  const getCameras = async (): Promise<string | null> => {
+  const getCameras = useCallback(async (): Promise<string | null> => {
     try {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
@@ -200,13 +208,13 @@ const ScannerContent: React.FC = () => {
         );
         return rearCamera?.id || cameras[0].id;
       }
-    } catch (err) {
-      console.error("Error getting cameras:", err);
+    } catch (e) {
+      console.error("Error getting cameras:", e);
     }
     return null;
-  };
+  }, []);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     if (!isMountedRef.current || initializationRef.current) return;
 
     initializationRef.current = true;
@@ -224,10 +232,10 @@ const ScannerContent: React.FC = () => {
       html5QrcodeRef.current = new Html5Qrcode("scanner-container");
 
       const config = {
-        fps: 10,
+        fps: 5,
         qrbox: {
-          width: Math.min(280, window.innerWidth - 40),
-          height: Math.min(180, window.innerHeight - 200)
+          width: Math.min(320, window.innerWidth - 40),
+          height: Math.min(320, window.innerHeight - 200)
         },
         aspectRatio: window.innerWidth / window.innerHeight,
       };
@@ -249,13 +257,13 @@ const ScannerContent: React.FC = () => {
       setCameraStarted(true);
       setScanError(null);
 
-    } catch (err) {
-      console.error("Camera start error:", err);
+    } catch (e) {
+      console.error("Camera start error:", e);
       if (isMountedRef.current) {
-        if (err instanceof Error) {
-          if (err.message.includes("Tidak ada kamera")) {
+        if (e instanceof Error) {
+          if (e.message.includes("Tidak ada kamera")) {
             setScanError("Tidak ada kamera yang ditemukan. Pastikan perangkat memiliki kamera.");
-          } else if (err.message.includes("Permission")) {
+          } else if (e.message.includes("Permission")) {
             setScanError("Izin akses kamera ditolak. Silakan berikan izin kamera di browser.");
           } else {
             setScanError("Gagal mengakses kamera. Silakan coba lagi.");
@@ -269,7 +277,7 @@ const ScannerContent: React.FC = () => {
         initializationRef.current = false;
       }
     }
-  };
+  }, [getCameras, handleScan, stopCamera]);
 
   const handleRetryScan = () => {
     if (!isMountedRef.current) return;
@@ -301,7 +309,7 @@ const ScannerContent: React.FC = () => {
     return () => {
       isMountedRef.current = false;
     };
-  }, [isHydrated, isLoggedIn]);
+  }, [isHydrated, isLoggedIn, startCamera]);
 
   // Cleanup effect
   useEffect(() => {
@@ -440,8 +448,11 @@ const ScannerContent: React.FC = () => {
             {/* Area scanner */}
             <div
               className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-              style={{ width: 320, height: 320 }} // Increased size
+              style={{ width: 280, height: 280 }} // Increased size
             >
+              <div className="w-full absolute top-0 text-white text-xs px-3 py-1 rounded-md font-medium shadow text-center">
+              Arahkan barcode ke dalam kotak
+            </div>
 
               {/* Garis scan animasi */}
               <div
@@ -569,9 +580,6 @@ const ScannerContent: React.FC = () => {
               >
                 Pemberian
               </button>
-            </div>
-            <div className="w-full absolute bottom-[130%] text-white text-xs px-3 py-1 rounded-md font-medium shadow text-center">
-              Arahkan barcode ke dalam kotak
             </div>
           </div>
         )}
