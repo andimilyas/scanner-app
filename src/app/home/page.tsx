@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import BottomNavigation from "@/components/BottomNavigation";
 
 export default function HomePage() {
-  const { scanResult, isLoggedIn, isHydrated, user, isLoading } = useApp();
+  const { scanResult, isLoggedIn, isHydrated, user, scanMode, isLoading } = useApp();
   const router = useRouter();
   const [, setScanError] = useState<string | null>(null);
 
