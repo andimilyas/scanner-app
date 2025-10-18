@@ -1,5 +1,5 @@
 import React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { QrCode, Home } from "lucide-react";
 import Drawer from "@mui/material/Drawer";
 

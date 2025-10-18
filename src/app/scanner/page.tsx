@@ -582,30 +582,32 @@ const ScannerContent: React.FC = () => {
           <div className="absolute left-0 right-0 bottom-28 flex justify-center items-center z-40 px-4">
             <div className="w-full max-w-xs flex bg-white rounded-lg p-0.5 shadow">
               <button
+                type="button"
                 onClick={() => {
-                  if (scanMode !== "validation") {
-                    setScanMode("validation");
-                    router.push("/scanner?mode=validation");
-                  }
+                  // Hanya ganti mode jika memang user klik, 
+                  // tapi status aktif harus berdasarkan mode di URL/dari drawer
+                  setScanMode("validation");
+                  router.push("/scanner?mode=validation");
                 }}
-                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${scanMode === "validation"
-                  ? "bg-indigo-600 text-white rounded-lg"
-                  : "text-indigo-600"
-                  }`}
+                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${
+                  (mode === "validation" || !mode)
+                    ? "bg-indigo-600 text-white rounded-lg"
+                    : "text-indigo-600"
+                }`}
               >
                 Validasi
               </button>
               <button
+                type="button"
                 onClick={() => {
-                  if (scanMode !== "dispensing") {
-                    setScanMode("dispensing");
-                    router.push("/scanner?mode=dispensing");
-                  }
+                  setScanMode("dispensing");
+                  router.push("/scanner?mode=dispensing");
                 }}
-                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${scanMode === "dispensing"
-                  ? "bg-indigo-600 text-white rounded-lg"
-                  : "text-indigo-600"
-                  }`}
+                className={`flex-1 py-2 font-semibold text-sm transition-all duration-200 ${
+                  mode === "dispensing"
+                    ? "bg-green-600 text-white rounded-lg"
+                    : "text-green-600"
+                }`}
               >
                 Pemberian
               </button>
