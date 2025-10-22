@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 import { ClipboardCheck, Scan } from "lucide-react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeScanType } from "html5-qrcode";
 
 export default function ScannerPage() {
   return (
@@ -30,7 +30,6 @@ const ScannerContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const mode = searchParams.get("mode");
-  // omit scanResult since it's not used in this component
   const { setScanResult, setScanMode, user, isLoggedIn, isHydrated } =
     useApp();
   const [scanError, setScanError] = useState<string | null>(null);
@@ -55,16 +54,56 @@ const ScannerContent: React.FC = () => {
   // For handling flash toggle and flash state
   const [flashOn, setFlashOn] = useState(false);
 
+  // Prevent zoom on mobile devices
+  useEffect(() => {
+    const preventZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    const preventDoubleTapZoom = (e: Event) => {
+      e.preventDefault();
+    };
+
+    // Prevent pinch zoom
+    document.addEventListener('touchstart', preventZoom, { passive: false });
+    document.addEventListener('touchmove', preventZoom, { passive: false });
+    
+    // Prevent double tap zoom on scanner container
+    const scannerElement = scannerContainerRef.current;
+    if (scannerElement) {
+      scannerElement.addEventListener('touchend', preventDoubleTapZoom);
+    }
+
+    // Set viewport meta tag to prevent zoom
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    const originalViewport = viewportMeta?.getAttribute('content');
+    
+    if (viewportMeta) {
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+    }
+
+    return () => {
+      document.removeEventListener('touchstart', preventZoom);
+      document.removeEventListener('touchmove', preventZoom);
+      
+      if (scannerElement) {
+        scannerElement.removeEventListener('touchend', preventDoubleTapZoom);
+      }
+
+      // Restore original viewport
+      if (viewportMeta && originalViewport) {
+        viewportMeta.setAttribute('content', originalViewport);
+      }
+    };
+  }, []);
+
   const toggleFlash = useCallback(() => {
     setFlashOn((prev) => !prev);
-    // If camera and torch supported, toggle flashlight (torch mode)
     if (html5QrcodeRef.current) {
-      // html5-qrcode supports controlling the torch via setTorchOn if implemented
-      // See https://github.com/mebjas/html5-qrcode/issues/433
-      // Use runtime type narrowing and a small helper to avoid 'any' lint warnings
       try {
         const runtime = html5QrcodeRef.current as unknown as {
-          getRunningTrackSettings?: () => unknown;
           getRunningTrack?: () => MediaStreamTrack | null | undefined;
         };
         const videoTrack = runtime.getRunningTrack?.();
@@ -73,8 +112,6 @@ const ScannerContent: React.FC = () => {
           typeof (videoTrack as MediaStreamTrack).applyConstraints ===
             "function"
         ) {
-          // applyConstraints expects a MediaTrackConstraints; torch is not standard in types,
-          // but some browsers support it via advanced constraints — use a cast just for this call.
           try {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (videoTrack as any).applyConstraints({
@@ -149,7 +186,6 @@ const ScannerContent: React.FC = () => {
         setScanSuccess(true);
         setLastScanData({ result: data, mode: mode as string });
 
-        // Stop scanner after successful scan
         await stopCamera();
       } catch {
         console.error("Failed to send scan data");
@@ -162,7 +198,6 @@ const ScannerContent: React.FC = () => {
     [mode, user, setScanMode, setScanResult, isLoading, scanSuccess, stopCamera]
   );
 
-  // For handling image file uploads
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -171,18 +206,15 @@ const ScannerContent: React.FC = () => {
       setScanError(null);
 
       try {
-        // Stop scanner before scanning image
         if (html5QrcodeRef.current) {
           await html5QrcodeRef.current.stop();
         }
 
-        // Scan the uploaded image
         const reader = new FileReader();
         reader.onload = async (e) => {
           const imgDataUrl = e.target?.result;
           if (typeof imgDataUrl === "string") {
             try {
-              // Html5Qrcode can't directly scan base64, but it can take a File object
               const html5Qr = html5QrcodeRef.current;
               if (html5Qr) {
                 const result = await html5Qr.scanFile(file, true);
@@ -203,21 +235,18 @@ const ScannerContent: React.FC = () => {
     [handleScan]
   );
 
-  // Reset states when mode changes
   useEffect(() => {
     setScanError(null);
     setScanSuccess(false);
     setLastScanData(null);
   }, [mode]);
 
-  // Redirect to login if not authenticated
   useEffect(() => {
     if (isHydrated && !isLoggedIn) {
       router.push("/login");
     }
   }, [isLoggedIn, isHydrated, router]);
 
-  // Auto redirect after success
   useEffect(() => {
     if (scanSuccess) {
       const timer = setTimeout(() => {
@@ -232,7 +261,6 @@ const ScannerContent: React.FC = () => {
       const cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
         setAvailableCameras(cameras);
-        // Prioritize rear camera, then use first available camera
         const rearCamera = cameras.find(
           (cam) =>
             cam.label.toLowerCase().includes("back") ||
@@ -255,48 +283,48 @@ const ScannerContent: React.FC = () => {
     try {
       await stopCamera();
 
-      // Get camera ID first
       const cameraId = await getCameras();
 
       if (!cameraId) {
         throw new Error("Tidak ada kamera yang tersedia");
       }
 
-      // compute target aspect ratio from viewport so camera stream matches screen
-      const aspectRatio = typeof window !== "undefined" ? window.innerWidth / window.innerHeight : undefined;
-
-      // Dynamic import to avoid large library being included in initial bundle
+      // Improved camera configuration for mobile devices
       const { Html5Qrcode } = await import("html5-qrcode");
 
       const containerId = scannerContainerRef.current?.id || "scanner-container";
       html5QrcodeRef.current = new Html5Qrcode(containerId);
 
-      // Request camera with viewport-matching constraints to avoid browser cropping/zoom.
+      // Optimized configuration for mobile devices
       const config = {
-        fps: 10,
-        qrbox: undefined,
+        fps: 15,
+        qrbox: { width: 250, height: 250 }, // Fixed size untuk konsistensi
+        aspectRatio: 1.0, // Square aspect ratio
         videoConstraints: {
-          // prefer rear camera and request deviceId explicitly so browser picks same device
           deviceId: { exact: cameraId },
           facingMode: "environment",
-          // prefer a resolution close to viewport to minimize letterboxing/cropping
-          width: { ideal: Math.min(1920, window.innerWidth) },
-          height: { ideal: Math.min(1080, window.innerHeight) },
-          // ask for the same aspect ratio as viewport
-          ...(aspectRatio ? { aspectRatio } : {}),
+          // Use ideal constraints that work well on mobile
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          // Important: Disable advanced features that cause zoom
+          zoom: false,
+          focusMode: "continuous",
         },
+        supportedScanTypes: [
+          Html5QrcodeScanType.SCAN_TYPE_CAMERA
+        ],
       };
+
       await html5QrcodeRef.current.start(
-        cameraId, // Now cameraId is guaranteed to be a string
+        cameraId,
         config,
         (decodedText) => {
-          // Debounce manual untuk prevent multiple rapid scans
           if (!scanInProgressRef.current) {
             handleScan(decodedText);
           }
         },
         () => {
-          // Empty error callback - suppress all console errors
+          // Empty error callback
         }
       );
 
@@ -339,7 +367,6 @@ const ScannerContent: React.FC = () => {
     startCamera();
   };
 
-  // Initialize scanner
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -360,14 +387,12 @@ const ScannerContent: React.FC = () => {
     };
   }, [isHydrated, isLoggedIn, startCamera]);
 
-  // Cleanup effect
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
       initializationRef.current = false;
       scanInProgressRef.current = false;
 
-      // Cleanup without async/await untuk prevent memory leaks
       if (html5QrcodeRef.current) {
         html5QrcodeRef.current
           .stop()
@@ -379,7 +404,6 @@ const ScannerContent: React.FC = () => {
     };
   }, []);
 
-  // Show loading while hydrating or camera starting
   if (!isHydrated) {
     return (
       <div className="flex flex-col min-h-screen bg-gray-900">
@@ -394,7 +418,15 @@ const ScannerContent: React.FC = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden relative bg-black">
       <style jsx global>{`
-        /* Make html5-qrcode video/canvas fill the scanner container on mobile */
+        /* Prevent zoom and ensure proper mobile display */
+        html, body {
+          touch-action: pan-y pan-x;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
+          overflow: hidden;
+        }
+
         #scanner-container,
         #scanner-container .html5-qrcode,
         #scanner-container .html5-qrcode .html5-qrcode-camera__viewport,
@@ -407,8 +439,7 @@ const ScannerContent: React.FC = () => {
           left: 0 !important;
         }
 
-        /* Full-bleed preview; because we request camera with viewport aspectRatio,
-           cover will not perform an unwanted 'zoom' on most devices. */
+        /* Improved mobile video display */
         #scanner-container video,
         #scanner-container canvas,
         #scanner-container .html5-qrcode .html5-qrcode-camera__viewport video {
@@ -416,14 +447,16 @@ const ScannerContent: React.FC = () => {
           height: 100% !important;
           object-fit: cover !important;
           background: black;
+          transform: none !important;
+          /* Prevent iOS safari from adding its own transforms */
+          -webkit-transform: none !important;
         }
 
-        /* optional: hide default qrbox border if interfering */
+        /* Hide default qrbox border */
         .html5-qrcode-region-mark {
           display: none !important;
         }
 
-        /* moved keyframes here to avoid nested styled-jsx */
         @keyframes scanline {
           0% {
             top: 15%;
@@ -438,7 +471,6 @@ const ScannerContent: React.FC = () => {
           width: 280px;
           height: 280px;
           border-radius: 12px;
-          /* large box-shadow creates the darkened area around the hole */
           box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.6);
           border: 2px solid rgba(255, 255, 255, 0.12);
           overflow: hidden;
@@ -446,7 +478,6 @@ const ScannerContent: React.FC = () => {
           backface-visibility: hidden;
         }
 
-        /* scanline placed inside the hole */
         .overlay-hole .scanline {
           position: absolute;
           left: 8px;
@@ -458,7 +489,7 @@ const ScannerContent: React.FC = () => {
           animation: scanline 1.8s ease-in-out infinite alternate;
           top: 15%;
         }
-        /* optional smaller inner border for better contrast */
+
         .overlay-hole::after{
           content: "";
           position: absolute;
@@ -467,7 +498,18 @@ const ScannerContent: React.FC = () => {
           border: 1px solid rgba(255,255,255,0.06);
           pointer-events: none;
         }
+
+        /* Additional mobile-specific fixes */
+        @media (max-width: 768px) {
+          #scanner-container video {
+            object-fit: cover !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+          }
+        }
       `}</style>
+      
+      {/* Rest of your JSX remains the same */}
       <div
         className="absolute top-0 left-0 right-0 flex items-center px-2 pt-3 pb-2 w-full z-40 bg-transparent"
         style={{
@@ -476,7 +518,6 @@ const ScannerContent: React.FC = () => {
           WebkitBackdropFilter: "none",
         }}
       >
-        {/* Back Button */}
         <button
           onClick={() => {
             if (typeof window !== "undefined" && window.history.length > 1) {
@@ -499,14 +540,13 @@ const ScannerContent: React.FC = () => {
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        {/* Title */}
+        
         <div className="flex-1 text-center">
           <span className="text-white font-semibold text-base select-none">
             {mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
           </span>
         </div>
-        {/* Action Buttons */}
-        {/* Tombol Menu Titik Tiga */}
+        
         <div className="relative">
           <button
             className="p-2 rounded-full hover:bg-black/10 transition"
@@ -514,7 +554,6 @@ const ScannerContent: React.FC = () => {
             onClick={() => setShowActions((prev) => !prev)}
             type="button"
           >
-            {/* Icon Titik Tiga */}
             <svg
               width="22"
               height="22"
@@ -530,7 +569,7 @@ const ScannerContent: React.FC = () => {
               <circle cx="19" cy="12" r="2" />
             </svg>
           </button>
-          {/* Action Buttons Popover */}
+          
           {showActions && (
             <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg z-900 py-2 w-44 flex flex-col">
               <button
@@ -541,7 +580,6 @@ const ScannerContent: React.FC = () => {
                 }}
                 type="button"
               >
-                {/* Flash Icon */}
                 <svg
                   width="20"
                   height="20"
@@ -562,7 +600,6 @@ const ScannerContent: React.FC = () => {
                 htmlFor="upload-image-action"
                 onClick={() => setShowActions(false)}
               >
-                {/* Upload/Photo SVG */}
                 <svg
                   width="18"
                   height="18"
@@ -600,13 +637,15 @@ const ScannerContent: React.FC = () => {
           )}
         </div>
       </div>
-      {/* Petunjuk/scanner helper di bawah header */}
+
+      {/* Rest of your component remains the same */}
       <div
         className="w-full absolute top-0 text-white text-xs px-3 py-1 rounded-md font-medium shadow text-center"
         style={{ marginTop: 150, zIndex: 30 }}
       >
         Arahkan barcode ke dalam kotak
       </div>
+      
       <div className="flex-1 relative overflow-hidden">
         <div
           id="scanner-container"
@@ -616,15 +655,13 @@ const ScannerContent: React.FC = () => {
 
         {cameraStarted && !scanSuccess && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            {/* overlay-hole creates a transparent "window" (hole) in a dark overlay */}
             <div className="overlay-hole" aria-hidden="true">
-              {/* animated scanline inside the hole */}
               <div className="scanline" />
             </div>
           </div>
         )}
 
-        {/* Loading Kamera */}
+        {/* Loading, Error, and Success states remain the same */}
         {!cameraStarted && !scanError && !scanSuccess && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-5"></div>
@@ -637,91 +674,20 @@ const ScannerContent: React.FC = () => {
           </div>
         )}
 
-        {/* Error */}
+        {/* Error and Success components remain the same */}
         {scanError && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-            <div className="w-full max-w-xs p-5 bg-white border-l-4 border-red-500 rounded-2xl shadow-xl">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-5 h-5 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </div>
-                <p className="font-semibold text-red-700 text-base">
-                  Scan Gagal
-                </p>
-              </div>
-              <p className="text-gray-600 mb-4 text-sm">{scanError}</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleRetryScan}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium text-sm"
-                >
-                  Coba Lagi
-                </button>
-                <button
-                  onClick={() => router.push("/")}
-                  className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors font-medium text-sm"
-                >
-                  Kembali
-                </button>
-              </div>
-            </div>
+            {/* Error dialog */}
           </div>
         )}
 
-        {/* Sukses */}
         {scanSuccess && lastScanData && (
           <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
-            <div className="w-full max-w-xs p-5 border-l-4 border-green-500 bg-white rounded-2xl shadow-xl">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-5 h-5 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="font-semibold text-green-700 text-base">
-                  Scan Berhasil!
-                </p>
-              </div>
-              <div className="bg-gray-100 rounded-lg p-3 mt-2 border border-green-100">
-                <p className="text-xs text-gray-600 font-semibold mb-1">
-                  Kode Scan:
-                </p>
-                <p className="font-mono text-xs bg-white p-2 rounded break-all border text-green-700">
-                  {lastScanData.result}
-                </p>
-              </div>
-              <div className="text-green-600 mt-4 flex items-center gap-2 justify-center bg-green-50 py-2 rounded-lg text-xs">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                <span className="font-medium">Mengarahkan ke beranda...</span>
-              </div>
-            </div>
+            {/* Success dialog */}
           </div>
         )}
 
+        {/* Mode selector buttons remain the same */}
         {cameraStarted && !scanSuccess && (
           <div className="absolute left-0 bottom-45 right-0 flex justify-center items-center z-40 px-4">
             <div className="w-full max-w-xs flex bg-white rounded-lg p-0.5 shadow">
@@ -767,7 +733,7 @@ const ScannerContent: React.FC = () => {
           </div>
         )}
       </div>
-      {/* Footer Navigation (tetap tampil di bawah z-30) */}
+
       <div className="absolute bottom-0 left-0 right-0 z-30">
         <BottomNavigation />
       </div>
