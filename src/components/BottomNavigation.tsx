@@ -1,6 +1,6 @@
 import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { QrCode, Home } from "lucide-react";
+import { QrCode, Home, ClipboardCheck, Scan } from "lucide-react";
 import Drawer from "@mui/material/Drawer";
 
 
@@ -77,10 +77,7 @@ const BottomNavigation: React.FC = () => {
             className="w-full p-4 mb-3 bg-white border border-indigo-200 rounded-xl shadow hover:shadow-md flex items-center gap-3 transition"
           >
             <span className="flex items-center justify-center rounded-full bg-indigo-100/70" style={{ width: 40, height: 40 }}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
-                <rect x="4" y="4" width="16" height="16" rx="3" strokeWidth={2} />
-              </svg>
+              <ClipboardCheck className="w-6 h-6 text-indigo-600" />
             </span>
             <div className="flex flex-col items-start">
               <span className="font-semibold text-indigo-700">Validasi Kemasan Resep</span>
@@ -95,10 +92,7 @@ const BottomNavigation: React.FC = () => {
             className="w-full p-4 bg-white border border-green-200 rounded-xl shadow hover:shadow-md flex items-center gap-3 transition"
           >
             <span className="flex items-center justify-center rounded-full bg-green-100/70" style={{ width: 40, height: 40 }}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <rect x="4" y="4" width="16" height="16" rx="3" strokeWidth={2} />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h4" />
-              </svg>
+              <Scan className="w-6 h-6 text-green-600" />
             </span>
             <div className="flex flex-col items-start">
               <span className="font-semibold text-green-700">Pemberian Obat ke Pasien</span>
