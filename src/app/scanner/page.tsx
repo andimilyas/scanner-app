@@ -597,8 +597,6 @@ const ScannerContent: React.FC = () => {
               </button>
               <label
                 className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 text-gray-800 text-sm cursor-pointer"
-                htmlFor="upload-image-action"
-                onClick={() => setShowActions(false)}
               >
                 <svg
                   width="18"
@@ -617,7 +615,6 @@ const ScannerContent: React.FC = () => {
                 </svg>
                 Unggah Gambar
                 <input
-                  id="upload-image-action"
                   type="file"
                   accept="image/*"
                   className="hidden"
@@ -695,7 +692,7 @@ const ScannerContent: React.FC = () => {
                   Coba Lagi
                 </button>
                 <button
-                  onClick={() => router.push("/")}
+                  onClick={() => router.push("/home")}
                   className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors font-medium text-sm"
                 >
                   Kembali
