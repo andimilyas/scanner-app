@@ -31,7 +31,7 @@ const ScannerContent: React.FC = () => {
   const router = useRouter();
   const mode = searchParams.get("mode");
   // omit scanResult since it's not used in this component
-  const { scanMode, setScanResult, setScanMode, user, isLoggedIn, isHydrated } =
+  const { setScanResult, setScanMode, user, isLoggedIn, isHydrated } =
     useApp();
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
