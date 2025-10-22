@@ -1,7 +1,6 @@
 "use client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
-import { Html5Qrcode } from "html5-qrcode";
 import React, {
   useCallback,
   useEffect,
@@ -11,6 +10,7 @@ import React, {
 } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
 import { ClipboardCheck, Scan } from "lucide-react";
+import { Html5Qrcode } from "html5-qrcode";
 
 export default function ScannerPage() {
   return (
@@ -262,17 +262,30 @@ const ScannerContent: React.FC = () => {
         throw new Error("Tidak ada kamera yang tersedia");
       }
 
-      html5QrcodeRef.current = new Html5Qrcode("scanner-container");
+      // compute target aspect ratio from viewport so camera stream matches screen
+      const aspectRatio = typeof window !== "undefined" ? window.innerWidth / window.innerHeight : undefined;
 
+      // Dynamic import to avoid large library being included in initial bundle
+      const { Html5Qrcode } = await import("html5-qrcode");
+
+      const containerId = scannerContainerRef.current?.id || "scanner-container";
+      html5QrcodeRef.current = new Html5Qrcode(containerId);
+
+      // Request camera with viewport-matching constraints to avoid browser cropping/zoom.
       const config = {
-        fps: 5,
-        qrbox: {
-          width: Math.min(320, window.innerWidth - 40),
-          height: Math.min(320, window.innerHeight - 200),
+        fps: 10,
+        qrbox: undefined,
+        videoConstraints: {
+          // prefer rear camera and request deviceId explicitly so browser picks same device
+          deviceId: { exact: cameraId },
+          facingMode: "environment",
+          // prefer a resolution close to viewport to minimize letterboxing/cropping
+          width: { ideal: Math.min(1920, window.innerWidth) },
+          height: { ideal: Math.min(1080, window.innerHeight) },
+          // ask for the same aspect ratio as viewport
+          ...(aspectRatio ? { aspectRatio } : {}),
         },
-        aspectRatio: window.innerWidth / window.innerHeight,
       };
-
       await html5QrcodeRef.current.start(
         cameraId, // Now cameraId is guaranteed to be a string
         config,
@@ -394,12 +407,15 @@ const ScannerContent: React.FC = () => {
           left: 0 !important;
         }
 
+        /* Full-bleed preview; because we request camera with viewport aspectRatio,
+           cover will not perform an unwanted 'zoom' on most devices. */
         #scanner-container video,
         #scanner-container canvas,
         #scanner-container .html5-qrcode .html5-qrcode-camera__viewport video {
           width: 100% !important;
           height: 100% !important;
-          object-fit: cover !important; /* crop to fill screen */
+          object-fit: cover !important;
+          background: black;
         }
 
         /* optional: hide default qrbox border if interfering */
@@ -415,6 +431,41 @@ const ScannerContent: React.FC = () => {
           100% {
             top: 85%;
           }
+        }
+
+        .overlay-hole {
+          position: relative;
+          width: 280px;
+          height: 280px;
+          border-radius: 12px;
+          /* large box-shadow creates the darkened area around the hole */
+          box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.6);
+          border: 2px solid rgba(255, 255, 255, 0.12);
+          overflow: hidden;
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+        }
+
+        /* scanline placed inside the hole */
+        .overlay-hole .scanline {
+          position: absolute;
+          left: 8px;
+          right: 8px;
+          height: 6px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, rgba(99,102,241,0.95), rgba(139,92,246,0.85), rgba(99,102,241,0.95));
+          box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+          animation: scanline 1.8s ease-in-out infinite alternate;
+          top: 15%;
+        }
+        /* optional smaller inner border for better contrast */
+        .overlay-hole::after{
+          content: "";
+          position: absolute;
+          inset: 6px;
+          border-radius: 9px;
+          border: 1px solid rgba(255,255,255,0.06);
+          pointer-events: none;
         }
       `}</style>
       <div
@@ -564,19 +615,11 @@ const ScannerContent: React.FC = () => {
         />
 
         {cameraStarted && !scanSuccess && (
-          <div className="absolute inset-0 z-20">
-            {/* Area scanner */}
-            <div
-              className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-              style={{ width: 280, height: 280 }} // Increased size
-            >
-              {/* Garis scan animasi */}
-              <div
-                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-indigo-400 via-indigo-300 to-indigo-400 shadow-md rounded"
-                style={{
-                  animation: "scanline 1.8s ease-in-out infinite alternate", // Adjusted animation duration
-                }}
-              ></div>
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            {/* overlay-hole creates a transparent "window" (hole) in a dark overlay */}
+            <div className="overlay-hole" aria-hidden="true">
+              {/* animated scanline inside the hole */}
+              <div className="scanline" />
             </div>
           </div>
         )}
@@ -680,7 +723,7 @@ const ScannerContent: React.FC = () => {
         )}
 
         {cameraStarted && !scanSuccess && (
-          <div className="absolute left-0 bottom-50 right-0 flex justify-center items-center z-40 px-4">
+          <div className="absolute left-0 bottom-45 right-0 flex justify-center items-center z-40 px-4">
             <div className="w-full max-w-xs flex bg-white rounded-lg p-0.5 shadow">
               <button
                 type="button"
