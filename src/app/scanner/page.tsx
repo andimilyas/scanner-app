@@ -342,6 +342,39 @@ const ScannerContent: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden relative bg-black">
+     <style jsx global>{`
+       /* Make html5-qrcode video/canvas fill the scanner container on mobile */
+       #scanner-container,
+       #scanner-container .html5-qrcode,
+       #scanner-container .html5-qrcode .html5-qrcode-camera__viewport,
+       #scanner-container .html5-qrcode-element,
+       #scanner-container .html5-qrcode-region {
+         width: 100% !important;
+         height: 100% !important;
+         position: absolute !important;
+         top: 0 !important;
+         left: 0 !important;
+       }
+
+       #scanner-container video,
+       #scanner-container canvas,
+       #scanner-container .html5-qrcode .html5-qrcode-camera__viewport video {
+         width: 100% !important;
+         height: 100% !important;
+         object-fit: cover !important; /* crop to fill screen */
+       }
+
+       /* optional: hide default qrbox border if interfering */
+       .html5-qrcode-region-mark {
+         display: none !important;
+       }
+
+       /* moved keyframes here to avoid nested styled-jsx */
+       @keyframes scanline {
+         0% { top: 15%; }
+         100% { top: 85%; }
+       }
+     `}</style>
       <div
         className="absolute top-0 left-0 right-0 flex items-center px-2 pt-3 pb-2 w-full z-40 bg-transparent"
         style={{
@@ -490,17 +523,6 @@ const ScannerContent: React.FC = () => {
                   animation: "scanline 1.8s ease-in-out infinite alternate", // Adjusted animation duration
                 }}
               ></div>
-
-              <style jsx>{`
-              @keyframes scanline {
-                0% {
-                  top: 15%; // Adjusted starting position
-                }
-                100% {
-                  top: 85%; // Adjusted ending position
-                }
-              }
-            `}</style>
             </div>
           </div>
 
