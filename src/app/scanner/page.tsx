@@ -691,12 +691,6 @@ const ScannerContent: React.FC = () => {
                 >
                   Coba Lagi
                 </button>
-                <button
-                  onClick={() => router.push("/home")}
-                  className="flex-1 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors font-medium text-sm"
-                >
-                  Kembali
-                </button>
               </div>
             </div>
           </div>
