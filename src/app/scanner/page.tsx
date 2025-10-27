@@ -32,6 +32,7 @@ const ScannerContent: React.FC = () => {
   const [cameraReady, setCameraReady] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [isCameraActive, setIsCameraActive] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -129,12 +130,19 @@ const ScannerContent: React.FC = () => {
               ? "Kode terlalu panjang atau format tidak sesuai."
               : result.error;
           }
+        
+          stopCamera();
+          setIsCameraActive(false);
           setScanError(errorMsg);
+        
           processingRef.current = false;
           lastScannedRef.current = "";
           setIsProcessing(false);
+        
           return;
         }
+        
+        
 
         setScanSuccess(true);
         setLastScanData(data);
@@ -143,7 +151,7 @@ const ScannerContent: React.FC = () => {
           if (mountedRef.current) {
             router.push("/");
           }
-        }, 2000);
+        }, 2500);
       } catch (error) {
         console.error("Scan error:", error);
         setScanError("Terjadi kesalahan koneksi. Silakan coba lagi.");
@@ -316,13 +324,11 @@ const ScannerContent: React.FC = () => {
     setLastScanData(null);
     lastScannedRef.current = "";
     processingRef.current = false;
-    setIsProcessing(false);
-    
-    stopCamera();
-    setTimeout(() => {
-      startCamera();
-    }, 100);
+    setIsProcessing(false);  
+    setIsCameraActive(true);
   };
+  
+  
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
@@ -360,6 +366,18 @@ const ScannerContent: React.FC = () => {
       stopCamera();
     };
   }, [stopCamera]);
+
+  useEffect(() => {
+    if (isCameraActive) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+  
+    return () => {
+      stopCamera();
+    };
+  }, [isCameraActive]);  
 
   if (!isHydrated) {
     return (
@@ -464,13 +482,16 @@ const ScannerContent: React.FC = () => {
 
       {/* Scanner Container */}
       <div className="flex-1 relative overflow-hidden">
-        <video
-          ref={videoRef}
-          className="absolute inset-0 w-full h-full object-cover"
-          autoPlay
-          playsInline
-          muted
-        />
+        {isCameraActive && (
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            playsInline
+            muted
+          />
+        )}
+        
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Overlay with scan area */}
@@ -581,7 +602,7 @@ const ScannerContent: React.FC = () => {
 
         {/* Mode selector */}
         {cameraReady && !scanSuccess && !scanError && (
-          <div className="absolute left-0 bottom-24 right-0 flex justify-center items-center z-40 px-4">
+          <div className="absolute left-0 bottom-34 right-0 flex justify-center items-center z-40 px-4">
             <div className="w-full max-w-md flex bg-white/95 backdrop-blur-sm rounded-2xl p-1 shadow-xl">
               <button
                 type="button"
