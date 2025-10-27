@@ -24,7 +24,7 @@ const ScannerContent: React.FC = () => {
   const router = useRouter();
   const mode = searchParams.get("mode") || "validation";
   const { setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
-  
+
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   const [lastScanData, setLastScanData] = useState<string | null>(null);
@@ -33,7 +33,7 @@ const ScannerContent: React.FC = () => {
   const [showActions, setShowActions] = useState(false);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [isCameraActive, setIsCameraActive] = useState(true);
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,7 +49,6 @@ const ScannerContent: React.FC = () => {
         e.preventDefault();
       }
     };
-
     document.addEventListener("touchstart", preventZoom, { passive: false });
     document.addEventListener("touchmove", preventZoom, { passive: false });
 
@@ -66,7 +65,6 @@ const ScannerContent: React.FC = () => {
     return () => {
       document.removeEventListener("touchstart", preventZoom);
       document.removeEventListener("touchmove", preventZoom);
-
       if (viewportMeta && originalViewport) {
         viewportMeta.setAttribute("content", originalViewport);
       }
@@ -89,8 +87,24 @@ const ScannerContent: React.FC = () => {
     processingRef.current = false;
   }, [mode]);
 
-  // Process scan result
-  const processScan = useCallback(
+  // Stop camera
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraReady(false);
+  }, []);
+
+   // Process scan result
+   const processScan = useCallback(
     async (data: string) => {
       if (processingRef.current || isProcessing || scanSuccess) return;
       if (data === lastScannedRef.current) return;
@@ -103,6 +117,7 @@ const ScannerContent: React.FC = () => {
       // Stop scanning while processing
       if (scanIntervalRef.current) {
         clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
       }
 
       try {
@@ -130,19 +145,17 @@ const ScannerContent: React.FC = () => {
               ? "Kode terlalu panjang atau format tidak sesuai."
               : result.error;
           }
-        
+
           stopCamera();
           setIsCameraActive(false);
           setScanError(errorMsg);
-        
+
           processingRef.current = false;
           lastScannedRef.current = "";
           setIsProcessing(false);
-        
+
           return;
         }
-        
-        
 
         setScanSuccess(true);
         setLastScanData(data);
@@ -160,11 +173,10 @@ const ScannerContent: React.FC = () => {
         setIsProcessing(false);
       }
     },
-    [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, router]
+    [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, router, stopCamera]
   );
-
-  // Scan barcode from video
-  const scanBarcode = useCallback(async () => {
+   // Scan barcode from video
+   const scanBarcode = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || processingRef.current) return;
 
     const video = videoRef.current;
@@ -196,12 +208,9 @@ const ScannerContent: React.FC = () => {
 
   // Start camera
   const startCamera = useCallback(async () => {
+    // Always stop first to avoid play() race
+    stopCamera();
     try {
-      // Stop existing stream
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
-
       const constraints = {
         video: {
           facingMode,
@@ -215,12 +224,30 @@ const ScannerContent: React.FC = () => {
       streamRef.current = stream;
 
       if (videoRef.current && mountedRef.current) {
+        // Attach and wait for metadata before playing to avoid AbortError
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute("playsinline", "true");
         videoRef.current.setAttribute("webkit-playsinline", "true");
-        
-        await videoRef.current.play();
-        
+
+        const playPromise = new Promise<void>((resolve, reject) => {
+          const handler = () => {
+            videoRef.current?.removeEventListener("loadedmetadata", handler);
+            resolve();
+          };
+          if (videoRef.current?.readyState! >= 1) {
+            resolve();
+          } else {
+            videoRef.current?.addEventListener("loadedmetadata", handler);
+          }
+        });
+
+        await playPromise;
+
+        try {
+          await videoRef.current.play();
+        } catch (e) {
+          // Defensive: some browsers may play automatically
+        }
         setCameraReady(true);
         setScanError(null);
 
@@ -228,7 +255,6 @@ const ScannerContent: React.FC = () => {
         if (scanIntervalRef.current) {
           clearInterval(scanIntervalRef.current);
         }
-        
         scanIntervalRef.current = setInterval(() => {
           if (mountedRef.current && !processingRef.current) {
             scanBarcode();
@@ -249,22 +275,10 @@ const ScannerContent: React.FC = () => {
         }
       }
     }
-  }, [facingMode, scanBarcode]);
+  }, [facingMode, scanBarcode, stopCamera]);
 
-  // Stop camera
-  const stopCamera = useCallback(() => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraReady(false);
-  }, []);
+
+
 
   // Handle image upload
   const handleImageUpload = useCallback(
@@ -279,14 +293,14 @@ const ScannerContent: React.FC = () => {
         const reader = new FileReader();
         reader.onload = async (e) => {
           const imgDataUrl = e.target?.result as string;
-          
+
           const img = new Image();
           img.onload = async () => {
             const canvas = document.createElement("canvas");
             canvas.width = img.width;
             canvas.height = img.height;
             const ctx = canvas.getContext("2d");
-            
+
             if (!ctx) {
               setScanError("Gagal memproses gambar.");
               setIsProcessing(false);
@@ -324,11 +338,9 @@ const ScannerContent: React.FC = () => {
     setLastScanData(null);
     lastScannedRef.current = "";
     processingRef.current = false;
-    setIsProcessing(false);  
+    setIsProcessing(false);
     setIsCameraActive(true);
   };
-  
-  
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
@@ -365,7 +377,7 @@ const ScannerContent: React.FC = () => {
       mountedRef.current = false;
       stopCamera();
     };
-  }, [stopCamera]);
+  }, [startCamera, stopCamera]);
 
   useEffect(() => {
     if (isCameraActive) {
@@ -373,11 +385,10 @@ const ScannerContent: React.FC = () => {
     } else {
       stopCamera();
     }
-  
     return () => {
       stopCamera();
     };
-  }, [isCameraActive]);  
+  }, [isCameraActive, startCamera, stopCamera]);
 
   if (!isHydrated) {
     return (
@@ -456,7 +467,7 @@ const ScannerContent: React.FC = () => {
                 <Camera className="w-5 h-5" />
                 <span>Ganti Kamera</span>
               </button>
-              
+
               <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm cursor-pointer transition">
                 <Upload className="w-5 h-5" />
                 <span>Unggah Gambar</span>
@@ -491,7 +502,7 @@ const ScannerContent: React.FC = () => {
             muted
           />
         )}
-        
+
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Overlay with scan area */}

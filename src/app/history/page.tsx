@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Header from "@/components/header";
 import BottomNavigation from "@/components/BottomNavigation";
 import { useApp } from "@/app/context/AppContext";
@@ -23,10 +23,10 @@ function HistoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch history from API
-  const fetchHistory = async () => {
+  // Fetch history from API (with useCallback to avoid react-hooks/exhaustive-deps warning)
+  const fetchHistory = useCallback(async () => {
     if (!user?.no_absen) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -45,7 +45,7 @@ function HistoryPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user?.no_absen]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -59,7 +59,7 @@ function HistoryPage() {
     if (isHydrated && isLoggedIn && user?.no_absen) {
       fetchHistory();
     }
-  }, [isHydrated, isLoggedIn, user?.no_absen]);
+  }, [isHydrated, isLoggedIn, user?.no_absen, fetchHistory]);
 
   // Show loading while hydrating
   if (!isHydrated) {
@@ -80,7 +80,7 @@ function HistoryPage() {
       month: "long",
       day: "numeric",
     });
-    
+
     if (!acc[date]) {
       acc[date] = [];
     }
@@ -96,7 +96,7 @@ function HistoryPage() {
         isLoggedIn={isLoggedIn}
         currentPage="history"
       />
-      
+
       <main className="flex-1 flex flex-col px-4 py-6 max-w-2xl mx-auto w-full pb-24">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-6">
