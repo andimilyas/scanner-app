@@ -103,8 +103,8 @@ const ScannerContent: React.FC = () => {
     setCameraReady(false);
   }, []);
 
-   // Process scan result
-   const processScan = useCallback(
+  // Process scan result
+  const processScan = useCallback(
     async (data: string) => {
       if (processingRef.current || isProcessing || scanSuccess) return;
       if (data === lastScannedRef.current) return;
@@ -175,8 +175,9 @@ const ScannerContent: React.FC = () => {
     },
     [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, router, stopCamera]
   );
-   // Scan barcode from video
-   const scanBarcode = useCallback(async () => {
+
+  // Scan barcode from video
+  const scanBarcode = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || processingRef.current) return;
 
     const video = videoRef.current;
@@ -229,23 +230,27 @@ const ScannerContent: React.FC = () => {
         videoRef.current.setAttribute("playsinline", "true");
         videoRef.current.setAttribute("webkit-playsinline", "true");
 
-        const playPromise = new Promise<void>((resolve, reject) => {
+        const playPromise = new Promise<void>((resolve) => {
           const handler = () => {
-            videoRef.current?.removeEventListener("loadedmetadata", handler);
+            if (videoRef.current) {
+              videoRef.current.removeEventListener("loadedmetadata", handler);
+            }
             resolve();
           };
-          if (videoRef.current?.readyState! >= 1) {
+          if (videoRef.current && videoRef.current.readyState >= 1) {
             resolve();
-          } else {
-            videoRef.current?.addEventListener("loadedmetadata", handler);
+          } else if (videoRef.current) {
+            videoRef.current.addEventListener("loadedmetadata", handler);
           }
         });
 
         await playPromise;
 
         try {
-          await videoRef.current.play();
-        } catch (e) {
+          if (videoRef.current) {
+            await videoRef.current.play();
+          }
+        } catch {
           // Defensive: some browsers may play automatically
         }
         setCameraReady(true);
@@ -278,8 +283,6 @@ const ScannerContent: React.FC = () => {
   }, [facingMode, scanBarcode, stopCamera]);
 
 
-
-
   // Handle image upload
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,10 +294,10 @@ const ScannerContent: React.FC = () => {
 
       try {
         const reader = new FileReader();
-        reader.onload = async (e) => {
-          const imgDataUrl = e.target?.result as string;
+        reader.onload = async (loadEvent) => {
+          const imgDataUrl = (loadEvent.target?.result || "") as string;
 
-          const img = new Image();
+          const img = new window.Image();
           img.onload = async () => {
             const canvas = document.createElement("canvas");
             canvas.width = img.width;
