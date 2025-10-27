@@ -616,7 +616,7 @@ const ScannerContent: React.FC = () => {
 
         {/* Mode selector */}
         {cameraReady && !scanSuccess && !scanError && (
-          <div className="absolute left-0 bottom-34 right-0 flex justify-center items-center z-40 px-4">
+          <div className="absolute left-0 bottom-50 right-0 flex justify-center items-center z-40 px-4">
             <div className="w-full max-w-md flex bg-white/95 backdrop-blur-sm rounded-2xl p-1 shadow-xl">
               <button
                 type="button"
