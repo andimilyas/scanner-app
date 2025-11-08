@@ -173,7 +173,7 @@ const ScannerContent: React.FC = () => {
         setIsProcessing(false);
       }
     },
-    [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, router, stopCamera]
+    [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, stopCamera]
   );
 
   // Scan barcode from video
