@@ -160,11 +160,11 @@ const ScannerContent: React.FC = () => {
         setScanSuccess(true);
         setLastScanData(data);
 
-        setTimeout(() => {
-          if (mountedRef.current) {
-            router.push("/");
-          }
-        }, 2500);
+        // setTimeout(() => {
+        //   if (mountedRef.current) {
+        //     router.push("/");
+        //   }
+        // }, 2500);
       } catch (error) {
         console.error("Scan error:", error);
         setScanError("Terjadi kesalahan koneksi. Silakan coba lagi.");

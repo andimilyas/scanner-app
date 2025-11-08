@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
           .input("code", trimmedCode)
           .query(`
             UPDATE SIMARTDB.dbo.OUTH
-            SET CJAM_OUT = GETDATE(),
+            SET CJAM_OUT = REPLACE(CONVERT(VARCHAR(5), GETDATE(), 108), ':', ''),
                 user_out = @no_absen
             WHERE CNOTRAN = @code
           `);
