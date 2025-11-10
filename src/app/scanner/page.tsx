@@ -182,7 +182,7 @@ const ScannerContent: React.FC = () => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
 
     if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
