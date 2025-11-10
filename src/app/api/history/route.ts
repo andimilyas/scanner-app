@@ -61,12 +61,36 @@ export async function GET(req: NextRequest) {
       }
       
       // Add dispensing entry if exists for this user
-      // CJAM_OUT is VARCHAR, need to parse it carefully
+      // CJAM_OUT is VARCHAR time (HH:mm:ss), combine with a base date
       if (record.CJAM_OUT && record.user_out === userNoAbsen) {
         try {
-          // Try to parse the VARCHAR date
-          const dispensingDate = new Date(record.CJAM_OUT);
-          if (!isNaN(dispensingDate.getTime())) {
+          const timeStr = String(record.CJAM_OUT).trim();
+          const match = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$/.exec(timeStr);
+
+          // Determine base date: prefer valid_kemasan_at, fallback to today
+          let baseDate = new Date();
+          if (record.valid_kemasan_at) {
+            const vd = new Date(record.valid_kemasan_at);
+            if (!isNaN(vd.getTime())) {
+              baseDate = vd;
+            }
+          }
+
+          let dispensingDate: Date | null = null;
+          if (match) {
+            const [h, m, s] = match[0].split(":").map((v) => parseInt(v, 10));
+            const combined = new Date(baseDate);
+            combined.setHours(h, m, s, 0);
+            dispensingDate = combined;
+          } else {
+            // Fallback: in case legacy CJAM_OUT stored a full datetime string
+            const fallback = new Date(timeStr);
+            if (!isNaN(fallback.getTime())) {
+              dispensingDate = fallback;
+            }
+          }
+
+          if (dispensingDate) {
             items.push({
               id: `${record.code}-dispensing-${dispensingDate.getTime()}`,
               code: record.code,
@@ -75,9 +99,7 @@ export async function GET(req: NextRequest) {
               user: record.user_out,
             });
           } else {
-            // If can't parse as date, maybe it's a time string only
-            // Try to combine with current date
-            console.warn("Could not parse CJAM_OUT as date:", record.CJAM_OUT);
+            console.warn("Unable to parse CJAM_OUT time:", record.CJAM_OUT);
           }
         } catch (e) {
           console.error("Invalid dispensing date:", record.CJAM_OUT, e);
