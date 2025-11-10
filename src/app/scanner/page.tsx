@@ -182,18 +182,25 @@ const ScannerContent: React.FC = () => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
 
     if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+    // Use the video dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // Draw current frame
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Crop to a centered square ROI to reduce pixels checked
+    const roiSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.6); // 60% of the shortest side
+    const roiX = Math.floor((canvas.width - roiSize) / 2);
+    const roiY = Math.floor((canvas.height - roiSize) / 2);
+
+    const imageData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
 
     try {
-      // Dynamic import jsQR
       const jsQR = (await import("jsqr")).default;
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
         inversionAttempts: "dontInvert",
@@ -215,8 +222,9 @@ const ScannerContent: React.FC = () => {
       const constraints = {
         video: {
           facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          // Lower resolution speeds up canvas readback and decoding
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
         audio: false,
       };
@@ -256,7 +264,7 @@ const ScannerContent: React.FC = () => {
         setCameraReady(true);
         setScanError(null);
 
-        // Start scanning
+        // Start scanning (faster interval)
         if (scanIntervalRef.current) {
           clearInterval(scanIntervalRef.current);
         }
@@ -264,7 +272,7 @@ const ScannerContent: React.FC = () => {
           if (mountedRef.current && !processingRef.current) {
             scanBarcode();
           }
-        }, 300);
+        }, 150);
       }
     } catch (error) {
       console.error("Camera error:", error);
@@ -302,7 +310,7 @@ const ScannerContent: React.FC = () => {
             const canvas = document.createElement("canvas");
             canvas.width = img.width;
             canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
+            const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
 
             if (!ctx) {
               setScanError("Gagal memproses gambar.");
