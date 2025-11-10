@@ -343,6 +343,9 @@ const ScannerContent: React.FC = () => {
     processingRef.current = false;
     setIsProcessing(false);
     setIsCameraActive(true);
+    // Pastikan pemindaian berjalan kembali
+    // Mulai ulang kamera agar interval scanning aktif lagi
+    startCamera();
   };
 
   const toggleCamera = () => {
@@ -606,6 +609,12 @@ const ScannerContent: React.FC = () => {
                   {lastScanData}
                 </p>
               </div>
+              <button
+                onClick={handleRetryScan}
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold shadow-lg"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         )}
