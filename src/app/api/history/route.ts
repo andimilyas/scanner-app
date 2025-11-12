@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
               id: `${record.code}-validation-${validDate.getTime()}`,
               code: record.code,
               mode: "validation" as const,
-              timestamp: validDate.toISOString(),
+              timestamp: validDate.getTime(),
               user: record.valid_kemasan_by,
             });
           }
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
               id: `${record.code}-dispensing-${dispensingDate.getTime()}`,
               code: record.code,
               mode: "dispensing" as const,
-              timestamp: dispensingDate.toISOString(),
+              timestamp: dispensingDate.getTime(),
               user: record.user_out,
             });
           } else {
@@ -109,10 +109,8 @@ export async function GET(req: NextRequest) {
       return items;
     }).flat();
 
-    // Sort by timestamp descending
-    history.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
+    // Sort by timestamp descending (numeric epoch)
+    history.sort((a, b) => b.timestamp - a.timestamp);
 
     return NextResponse.json({ 
       success: true, 

@@ -10,7 +10,7 @@ interface HistoryItem {
   id: string;
   code: string;
   mode: "validation" | "dispensing";
-  timestamp: string;
+  timestamp: number;
   user: string;
   no_rawat?: string;
   no_resep?: string;
@@ -78,7 +78,7 @@ function HistoryPage() {
   }
 
   // Helpers
-  const toDateString = (ts: string) => {
+  const toDateString = (ts: number) => {
     const d = new Date(ts);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");

@@ -470,7 +470,7 @@ const ScannerContent: React.FC = () => {
 
           {showActions && (
             <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg z-50 py-1 w-48 flex flex-col">
-              <button
+              {/* <button
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm transition"
                 onClick={() => {
                   setShowActions(false);
@@ -480,7 +480,7 @@ const ScannerContent: React.FC = () => {
               >
                 <Camera className="w-5 h-5" />
                 <span>Ganti Kamera</span>
-              </button>
+              </button> */}
 
               <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm cursor-pointer transition">
                 <Upload className="w-5 h-5" />
