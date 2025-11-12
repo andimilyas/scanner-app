@@ -3,7 +3,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
 import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
-import { ClipboardCheck, Scan, Camera, Upload } from "lucide-react";
+import { ClipboardCheck, Scan, Upload } from "lucide-react";
 
 export default function ScannerPage() {
   return (
@@ -356,13 +356,13 @@ const ScannerContent: React.FC = () => {
     startCamera();
   };
 
-  const toggleCamera = () => {
-    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
-    stopCamera();
-    setTimeout(() => {
-      startCamera();
-    }, 100);
-  };
+  // const toggleCamera = () => {
+  //   setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+  //   stopCamera();
+  //   setTimeout(() => {
+  //     startCamera();
+  //   }, 100);
+  // };
 
   // Initialize camera
   useEffect(() => {
