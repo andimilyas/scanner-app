@@ -3,7 +3,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
 import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
-import { ClipboardCheck, Scan, Camera, Upload } from "lucide-react";
+import { ClipboardCheck, Scan, Upload } from "lucide-react";
 
 export default function ScannerPage() {
   return (
@@ -182,18 +182,25 @@ const ScannerContent: React.FC = () => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
 
     if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
+    // Use the video dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // Draw current frame
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Crop to a centered square ROI to reduce pixels checked
+    const roiSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.6); // 60% of the shortest side
+    const roiX = Math.floor((canvas.width - roiSize) / 2);
+    const roiY = Math.floor((canvas.height - roiSize) / 2);
+
+    const imageData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
 
     try {
-      // Dynamic import jsQR
       const jsQR = (await import("jsqr")).default;
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
         inversionAttempts: "dontInvert",
@@ -215,8 +222,9 @@ const ScannerContent: React.FC = () => {
       const constraints = {
         video: {
           facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          // Lower resolution speeds up canvas readback and decoding
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
         audio: false,
       };
@@ -256,7 +264,7 @@ const ScannerContent: React.FC = () => {
         setCameraReady(true);
         setScanError(null);
 
-        // Start scanning
+        // Start scanning (faster interval)
         if (scanIntervalRef.current) {
           clearInterval(scanIntervalRef.current);
         }
@@ -264,7 +272,7 @@ const ScannerContent: React.FC = () => {
           if (mountedRef.current && !processingRef.current) {
             scanBarcode();
           }
-        }, 300);
+        }, 150);
       }
     } catch (error) {
       console.error("Camera error:", error);
@@ -302,7 +310,7 @@ const ScannerContent: React.FC = () => {
             const canvas = document.createElement("canvas");
             canvas.width = img.width;
             canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
+            const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
 
             if (!ctx) {
               setScanError("Gagal memproses gambar.");
@@ -343,15 +351,18 @@ const ScannerContent: React.FC = () => {
     processingRef.current = false;
     setIsProcessing(false);
     setIsCameraActive(true);
+    // Pastikan pemindaian berjalan kembali
+    // Mulai ulang kamera agar interval scanning aktif lagi
+    startCamera();
   };
 
-  const toggleCamera = () => {
-    setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
-    stopCamera();
-    setTimeout(() => {
-      startCamera();
-    }, 100);
-  };
+  // const toggleCamera = () => {
+  //   setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+  //   stopCamera();
+  //   setTimeout(() => {
+  //     startCamera();
+  //   }, 100);
+  // };
 
   // Initialize camera
   useEffect(() => {
@@ -459,7 +470,7 @@ const ScannerContent: React.FC = () => {
 
           {showActions && (
             <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg z-50 py-1 w-48 flex flex-col">
-              <button
+              {/* <button
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm transition"
                 onClick={() => {
                   setShowActions(false);
@@ -469,7 +480,7 @@ const ScannerContent: React.FC = () => {
               >
                 <Camera className="w-5 h-5" />
                 <span>Ganti Kamera</span>
-              </button>
+              </button> */}
 
               <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm cursor-pointer transition">
                 <Upload className="w-5 h-5" />
@@ -608,7 +619,7 @@ const ScannerContent: React.FC = () => {
               </div>
               <button
                 onClick={handleRetryScan}
-                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg"
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold shadow-lg"
               >
                 Tutup
               </button>
