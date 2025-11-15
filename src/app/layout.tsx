@@ -4,6 +4,9 @@ import { AppProvider } from "./context/AppContext"
 export const metadata = {
   title: "Scanner Apotek",
   description: "Aplikasi Scanner Apotek",
+  icons: {
+    icon: "/logors.ico",
+  },
 };
 
 import { ReactNode } from "react";

@@ -606,10 +606,12 @@ const ScannerContent: React.FC = () => {
                   {lastScanData}
                 </p>
               </div>
-              <div className="text-green-600 flex items-center gap-3 justify-center bg-green-50 py-3 rounded-xl">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
-                <span className="font-semibold">Mengarahkan ke beranda...</span>
-              </div>
+              <button
+                onClick={handleRetryScan}
+                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         )}

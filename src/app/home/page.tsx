@@ -60,7 +60,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-white">
       <div className="flex-grow p-4 flex flex-col items-center max-w-lg mx-auto w-full space-y-6">
       <div
           className="w-full mb-6 rounded-xl bg-indigo-600 overflow-hidden relative flex flex-col items-center justify-center"

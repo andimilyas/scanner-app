@@ -1,11 +1,12 @@
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { QrCode, Home, ClipboardCheck, Scan } from "lucide-react";
 import Drawer from "@mui/material/Drawer";
 
 
 const BottomNavigation: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = React.useState(false);
 
   const handleDrawerOpen = () => {
@@ -22,7 +23,7 @@ const BottomNavigation: React.FC = () => {
         {/* Home */}
         <button
           onClick={() => router.push("/home")}
-          className="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition"
+          className={`flex flex-col items-center transition ${pathname === "/" || pathname.startsWith("/home") ? "text-indigo-600" : "text-gray-500 hover:text-indigo-600"}`}
         >
           <Home className="h-7 w-7 mb-1" />
           <span className="text-xs font-medium">Beranda</span>
@@ -41,7 +42,7 @@ const BottomNavigation: React.FC = () => {
         {/* Profile */}
         <button
           onClick={() => router.push("/profile")}
-          className="flex flex-col items-center text-gray-500 hover:text-indigo-600 transition"
+          className={`flex flex-col items-center transition ${pathname.startsWith("/profile") ? "text-indigo-600" : "text-gray-500 hover:text-indigo-600"}`}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <circle cx="12" cy="9" r="3" strokeWidth={2} />

@@ -3,6 +3,7 @@ import React, { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
 import Image from "next/image";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 
 export default function LoginPage() {
   const { setIsLoggedIn, setScanResult, setUser, isHydrated, isLoggedIn } = useApp();
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [formError, setFormError] = useState<string>("");
   const router = useRouter();
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   useEffect(() => {
     if (isHydrated && isLoggedIn) {
@@ -153,19 +155,33 @@ export default function LoginPage() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setFormError("");
-              }}
-              className={`w-full p-3 border rounded-xl text-black ${formError && formError.includes("Password") ? "border-red-500" : ""}`}
-              placeholder="********"
-              required
-              autoComplete="off"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFormError("");
+                }}
+                className={`w-full p-3 pr-10 border rounded-xl text-black ${formError && formError.includes("Password") ? "border-red-500" : ""}`}
+                placeholder="********"
+                required
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-600 focus:outline-none"
+                aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+              >
+                {showPassword ? (
+                  <VisibilityOff className="h-5 w-5 text-indigo-600" />
+                ) : (
+                  <Visibility className="h-5 w-5 text-indigo-600" />
+                )}
+              </button>
+            </div>
             {formError && formError.includes("Password") && (
               <p className="text-xs text-red-600 mt-1">{formError}</p>
             )}
