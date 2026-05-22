@@ -15,7 +15,7 @@ export default function RootPage() {
         try {
           const sessionData = JSON.parse(savedSession);
           if (sessionData.isLoggedIn && sessionData.user) {
-            router.push("/home");
+            router.push("/scanner?mode=validation");
             return;
           }
         } catch (error) {

@@ -1,746 +1,591 @@
 "use client";
+
 import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
 import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 import BottomNavigation from "@/components/BottomNavigation";
-import { ClipboardCheck, Scan, Upload } from "lucide-react";
+import Header from "@/components/header";
+import {
+  ClipboardCheck,
+  Scan,
+  RefreshCw,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+} from "lucide-react";
+import Link from "next/link";
+
+const LAST_MODE_KEY = "scanner_last_mode";
+
+type ScanMode = "validation" | "dispensing";
+
+interface ApiHistoryItem {
+  id: string;
+  code: string;
+  mode: ScanMode;
+  timestamp: number;
+  user: string;
+}
+
+interface LiveEntry {
+  id: string;
+  code: string;
+  mode: ScanMode;
+  timestamp: number;
+  status: "success" | "error" | "processing";
+  message?: string;
+}
+
+function getTodayDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function toDateString(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDateLabel(dateStr: string): string {
+  if (dateStr === getTodayDateString()) return "Hari ini";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
 
 export default function ScannerPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen bg-gray-900">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        <div className="flex items-center justify-center min-h-screen bg-gray-50">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
         </div>
       }
     >
-      <ScannerContent />
+      <WorkstationContent />
     </Suspense>
   );
 }
 
-const ScannerContent: React.FC = () => {
+const WorkstationContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const mode = searchParams.get("mode") || "validation";
+  const paramMode = searchParams.get("mode");
+  const mode: ScanMode = paramMode === "dispensing" ? "dispensing" : "validation";
   const { setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
-
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanSuccess, setScanSuccess] = useState<boolean>(false);
-  const [lastScanData, setLastScanData] = useState<string | null>(null);
+  const [apiHistory, setApiHistory] = useState<ApiHistoryItem[]>([]);
+  const [liveEntries, setLiveEntries] = useState<LiveEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [showActions, setShowActions] = useState(false);
-  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
-  const [isCameraActive, setIsCameraActive] = useState(true);
+  const [filterDate, setFilterDate] = useState<string>(getTodayDateString());
+  const [isTodayFilter, setIsTodayFilter] = useState(true);
+  const [listScope, setListScope] = useState<"all" | "current_mode">("all");
+  const [toast, setToast] = useState<{
+    type: "success" | "error";
+    message: string;
+    code?: string;
+  } | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const lastScannedRef = useRef<string>("");
-  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const processingRef = useRef<boolean>(false);
-  const mountedRef = useRef<boolean>(true);
   const hardwareInputRef = useRef<HTMLInputElement>(null);
+  const lastScannedRef = useRef<string>("");
+  const processingRef = useRef<boolean>(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Prevent zoom on mobile
-  useEffect(() => {
-    const preventZoom = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener("touchstart", preventZoom, { passive: false });
-    document.addEventListener("touchmove", preventZoom, { passive: false });
+  const showToast = useCallback(
+    (t: { type: "success" | "error"; message: string; code?: string }) => {
+      setToast(t);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+    },
+    []
+  );
 
-    const viewportMeta = document.querySelector('meta[name="viewport"]');
-    const originalViewport = viewportMeta?.getAttribute("content");
-
-    if (viewportMeta) {
-      viewportMeta.setAttribute(
-        "content",
-        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-      );
-    }
-
-    return () => {
-      document.removeEventListener("touchstart", preventZoom);
-      document.removeEventListener("touchmove", preventZoom);
-      if (viewportMeta && originalViewport) {
-        viewportMeta.setAttribute("content", originalViewport);
-      }
-    };
+  const focusHardwareInput = useCallback(() => {
+    requestAnimationFrame(() => hardwareInputRef.current?.focus());
   }, []);
 
-  // Redirect if not logged in
+  // Redirect if mode query missing
   useEffect(() => {
-    if (isHydrated && !isLoggedIn) {
-      router.push("/login");
+    if (paramMode !== "validation" && paramMode !== "dispensing") {
+      const saved = sessionStorage.getItem(LAST_MODE_KEY);
+      const initial: ScanMode = saved === "dispensing" ? "dispensing" : "validation";
+      router.replace(`/scanner?mode=${initial}`, { scroll: false });
+      return;
     }
+    setScanMode(mode);
+    sessionStorage.setItem(LAST_MODE_KEY, mode);
+  }, [paramMode, mode, setScanMode, router]);
+
+  useEffect(() => {
+    if (isHydrated && !isLoggedIn) router.push("/login");
   }, [isLoggedIn, isHydrated, router]);
 
-  // Reset states when mode changes
-  useEffect(() => {
-    setScanError(null);
-    setScanSuccess(false);
-    setLastScanData(null);
-    lastScannedRef.current = "";
-    processingRef.current = false;
-  }, [mode]);
+  const fetchHistory = useCallback(async () => {
+    if (!user?.no_absen) return;
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/history?user=${user.no_absen}&limit=50`);
+      const result = await res.json();
+      if (result.success) {
+        setApiHistory(result.data || []);
+      }
+    } catch (e) {
+      console.error("Fetch history error:", e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [user?.no_absen]);
 
-  // Stop camera
-  const stopCamera = useCallback(() => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraReady(false);
+  useEffect(() => {
+    if (isHydrated && isLoggedIn && user?.no_absen) fetchHistory();
+  }, [isHydrated, isLoggedIn, user?.no_absen, fetchHistory]);
+
+  useEffect(() => {
+    if (isHydrated && isLoggedIn) focusHardwareInput();
+  }, [isHydrated, isLoggedIn, mode, isProcessing, focusHardwareInput]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
-  // Process scan result
   const processScan = useCallback(
     async (data: string) => {
-      if (processingRef.current || isProcessing || scanSuccess) return;
+      if (processingRef.current || isProcessing) return;
       if (data === lastScannedRef.current) return;
 
       lastScannedRef.current = data;
       processingRef.current = true;
       setIsProcessing(true);
-      setScanError(null);
 
-      // Stop scanning while processing
-      if (scanIntervalRef.current) {
-        clearInterval(scanIntervalRef.current);
-        scanIntervalRef.current = null;
-      }
+      const processingId = `proc-${Date.now()}`;
+      setLiveEntries((prev) => [
+        {
+          id: processingId,
+          code: data,
+          mode,
+          timestamp: Date.now(),
+          status: "processing",
+        },
+        ...prev,
+      ]);
 
       try {
         setScanResult(data);
-        setScanMode(mode as "validation" | "dispensing");
-
-        const payload = {
-          code: data,
-          mode,
-          user: user?.no_absen || "1234",
-        };
+        setScanMode(mode);
 
         const response = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            code: data,
+            mode,
+            user: user?.no_absen || "",
+          }),
         });
 
         const result = await response.json();
 
+        setLiveEntries((prev) => prev.filter((e) => e.id !== processingId));
+
         if (!result.success) {
           let errorMsg = "Terjadi kesalahan saat memproses scan.";
           if (typeof result.error === "string") {
-            errorMsg = result.error.includes("String or binary data would be truncated")
+            errorMsg = result.error.includes(
+              "String or binary data would be truncated"
+            )
               ? "Kode terlalu panjang atau format tidak sesuai."
               : result.error;
           }
 
-          stopCamera();
-          setIsCameraActive(false);
-          setScanError(errorMsg);
-
-          processingRef.current = false;
+          setLiveEntries((prev) => [
+            {
+              id: `err-${Date.now()}`,
+              code: data,
+              mode,
+              timestamp: Date.now(),
+              status: "error",
+              message: errorMsg,
+            },
+            ...prev,
+          ]);
+          showToast({ type: "error", message: errorMsg, code: data });
           lastScannedRef.current = "";
-          setIsProcessing(false);
-
           return;
         }
 
-        setScanSuccess(true);
-        setLastScanData(data);
-
-        // setTimeout(() => {
-        //   if (mountedRef.current) {
-        //     router.push("/");
-        //   }
-        // }, 2500);
-      } catch (error) {
-        console.error("Scan error:", error);
-        setScanError("Terjadi kesalahan koneksi. Silakan coba lagi.");
-        processingRef.current = false;
-        lastScannedRef.current = "";
-        setIsProcessing(false);
-      }
-    },
-    [mode, user, setScanMode, setScanResult, isProcessing, scanSuccess, stopCamera]
-  );
-
-  // Scan barcode from video
-  const scanBarcode = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || processingRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
-
-    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-    // Use the video dimensions
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Draw current frame
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Crop to a centered square ROI to reduce pixels checked
-    const roiSize = Math.floor(Math.min(canvas.width, canvas.height) * 0.6); // 60% of the shortest side
-    const roiX = Math.floor((canvas.width - roiSize) / 2);
-    const roiY = Math.floor((canvas.height - roiSize) / 2);
-
-    const imageData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
-
-    try {
-      const jsQR = (await import("jsqr")).default;
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "dontInvert",
-      });
-
-      if (code?.data) {
-        await processScan(code.data);
-      }
-    } catch (error) {
-      console.error("Barcode scan error:", error);
-    }
-  }, [processScan]);
-
-  // Start camera
-  const startCamera = useCallback(async () => {
-    // Always stop first to avoid play() race
-    stopCamera();
-    try {
-      const constraints = {
-        video: {
-          facingMode,
-          // Lower resolution speeds up canvas readback and decoding
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-        audio: false,
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      streamRef.current = stream;
-
-      if (videoRef.current && mountedRef.current) {
-        // Attach and wait for metadata before playing to avoid AbortError
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute("playsinline", "true");
-        videoRef.current.setAttribute("webkit-playsinline", "true");
-
-        const playPromise = new Promise<void>((resolve) => {
-          const handler = () => {
-            if (videoRef.current) {
-              videoRef.current.removeEventListener("loadedmetadata", handler);
-            }
-            resolve();
-          };
-          if (videoRef.current && videoRef.current.readyState >= 1) {
-            resolve();
-          } else if (videoRef.current) {
-            videoRef.current.addEventListener("loadedmetadata", handler);
-          }
+        showToast({
+          type: "success",
+          message:
+            mode === "validation"
+              ? "Validasi berhasil"
+              : "Pemberian obat tercatat",
+          code: data,
         });
-
-        await playPromise;
-
-        try {
-          if (videoRef.current) {
-            await videoRef.current.play();
-          }
-        } catch {
-          // Defensive: some browsers may play automatically
-        }
-        setCameraReady(true);
-        setScanError(null);
-
-        // Start scanning (faster interval)
-        if (scanIntervalRef.current) {
-          clearInterval(scanIntervalRef.current);
-        }
-        scanIntervalRef.current = setInterval(() => {
-          if (mountedRef.current && !processingRef.current) {
-            scanBarcode();
-          }
-        }, 150);
-      }
-    } catch (error) {
-      console.error("Camera error:", error);
-      if (mountedRef.current) {
-        if (error instanceof Error) {
-          if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-            setScanError("Izin kamera ditolak. Aktifkan izin kamera di browser.");
-          } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-            setScanError("Kamera tidak ditemukan pada perangkat.");
-          } else {
-            setScanError("Gagal mengakses kamera. Coba refresh halaman.");
-          }
-        }
-      }
-    }
-  }, [facingMode, scanBarcode, stopCamera]);
-
-
-  // Handle image upload
-  const handleImageUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file || isProcessing) return;
-
-      setIsProcessing(true);
-      setScanError(null);
-
-      try {
-        const reader = new FileReader();
-        reader.onload = async (loadEvent) => {
-          const imgDataUrl = (loadEvent.target?.result || "") as string;
-
-          const img = new window.Image();
-          img.onload = async () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
-
-            if (!ctx) {
-              setScanError("Gagal memproses gambar.");
-              setIsProcessing(false);
-              return;
-            }
-
-            ctx.drawImage(img, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-            const jsQR = (await import("jsqr")).default;
-            const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-            if (code) {
-              await processScan(code.data);
-            } else {
-              setScanError("Tidak dapat membaca barcode dari gambar.");
-              setIsProcessing(false);
-            }
-          };
-          img.src = imgDataUrl;
-        };
-        reader.readAsDataURL(file);
-      } catch (error) {
-        console.error("Upload error:", error);
-        setScanError("Gagal memproses gambar yang diupload.");
+        await fetchHistory();
+      } catch {
+        setLiveEntries((prev) => prev.filter((e) => e.id !== processingId));
+        setLiveEntries((prev) => [
+          {
+            id: `err-${Date.now()}`,
+            code: data,
+            mode,
+            timestamp: Date.now(),
+            status: "error",
+            message: "Terjadi kesalahan koneksi.",
+          },
+          ...prev,
+        ]);
+        showToast({
+          type: "error",
+          message: "Terjadi kesalahan koneksi.",
+          code: data,
+        });
+        lastScannedRef.current = "";
+      } finally {
+        processingRef.current = false;
         setIsProcessing(false);
+        focusHardwareInput();
       }
     },
-    [processScan, isProcessing]
+    [
+      mode,
+      user,
+      setScanMode,
+      setScanResult,
+      isProcessing,
+      showToast,
+      fetchHistory,
+      focusHardwareInput,
+    ]
   );
-
-  const focusHardwareInput = useCallback(() => {
-    requestAnimationFrame(() => {
-      hardwareInputRef.current?.focus();
-    });
-  }, []);
 
   const handleHardwareKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (processingRef.current || scanSuccess) return;
+    if (processingRef.current) return;
     if (e.key !== "Enter") return;
-
     e.preventDefault();
     const code = e.currentTarget.value.trim();
     e.currentTarget.value = "";
-    if (code.length > 0) {
-      void processScan(code);
-    }
+    if (code.length > 0) void processScan(code);
   };
 
-  const handleRetryScan = () => {
-    setScanError(null);
-    setScanSuccess(false);
-    setLastScanData(null);
-    lastScannedRef.current = "";
-    processingRef.current = false;
-    setIsProcessing(false);
-    setIsCameraActive(true);
-    // Pastikan pemindaian berjalan kembali
-    // Mulai ulang kamera agar interval scanning aktif lagi
-    startCamera();
-    focusHardwareInput();
-  };
+  const apiForDate = apiHistory.filter(
+    (item) => toDateString(item.timestamp) === filterDate
+  );
 
-  // const toggleCamera = () => {
-  //   setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
-  //   stopCamera();
-  //   setTimeout(() => {
-  //     startCamera();
-  //   }, 100);
-  // };
+  const liveForDate = liveEntries.filter(
+    (item) => toDateString(item.timestamp) === filterDate
+  );
 
-  // Keep focus for USB/HID barcode scanner (types like keyboard + Enter)
-  useEffect(() => {
-    if (isHydrated && isLoggedIn && !scanSuccess && !scanError) {
-      focusHardwareInput();
-    }
-  }, [isHydrated, isLoggedIn, mode, scanSuccess, scanError, focusHardwareInput]);
+  const apiIds = new Set(apiForDate.map((i) => i.id));
 
-  // Initialize camera
-  useEffect(() => {
-    mountedRef.current = true;
+  const mergedRows: LiveEntry[] = [
+    ...liveForDate.filter((l) => l.status !== "success" || !apiIds.has(l.id)),
+    ...apiForDate.map((item) => ({
+      id: item.id,
+      code: item.code,
+      mode: item.mode,
+      timestamp: item.timestamp,
+      status: "success" as const,
+    })),
+  ].sort((a, b) => b.timestamp - a.timestamp);
 
-    if (isHydrated && isLoggedIn) {
-      const timer = setTimeout(() => {
-        if (mountedRef.current) {
-          startCamera();
-          focusHardwareInput();
-        }
-      }, 300);
+  const displayRows =
+    listScope === "current_mode"
+      ? mergedRows.filter((r) => r.mode === mode)
+      : mergedRows;
 
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [isHydrated, isLoggedIn, startCamera, focusHardwareInput]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      stopCamera();
-    };
-  }, [startCamera, stopCamera]);
-
-  useEffect(() => {
-    if (isCameraActive) {
-      startCamera();
-    } else {
-      stopCamera();
-    }
-    return () => {
-      stopCamera();
-    };
-  }, [isCameraActive, startCamera, stopCamera]);
+  const successCount = displayRows.filter((r) => r.status === "success").length;
 
   if (!isHydrated) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-900">
-        <div className="flex items-center justify-center flex-1 flex-col gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-          <p className="text-white text-lg">Memuat...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden relative bg-black">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 flex items-center px-2 pt-3 pb-2 w-full z-40 bg-gradient-to-b from-black/60 to-transparent">
-        <button
-          onClick={() => router.back()}
-          className="p-2 rounded-full hover:bg-white/10 transition"
-          aria-label="Kembali"
-        >
-          <svg
-            width="24"
-            height="24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            viewBox="0 0 24 24"
-          >
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
+    <div className="flex flex-col min-h-screen bg-gray-50 pb-24">
+      <Header title="Apotek RSUD Pasar Rebo" />
 
-        <div className="flex-1 text-center">
-          <span className="text-white font-semibold text-base select-none">
-            {mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
-          </span>
-        </div>
-
-        <div className="relative">
-          <button
-            className="p-2 rounded-full hover:bg-white/10 transition"
-            aria-label="Menu Aksi"
-            onClick={() => setShowActions((prev) => !prev)}
-            type="button"
-          >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ transform: "rotate(90deg)" }}
-            >
-              <circle cx="5" cy="12" r="2" />
-              <circle cx="12" cy="12" r="2" />
-              <circle cx="19" cy="12" r="2" />
-            </svg>
-          </button>
-
-          {showActions && (
-            <div className="absolute right-0 mt-2 bg-white rounded-lg shadow-lg z-50 py-1 w-48 flex flex-col">
-              {/* <button
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm transition"
-                onClick={() => {
-                  setShowActions(false);
-                  toggleCamera();
-                }}
-                type="button"
-              >
-                <Camera className="w-5 h-5" />
-                <span>Ganti Kamera</span>
-              </button> */}
-
-              <label className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 text-gray-800 text-sm cursor-pointer transition">
-                <Upload className="w-5 h-5" />
-                <span>Unggah Gambar</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  aria-label="Unggah Gambar"
-                />
-              </label>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Hidden input: USB scanner (HID keyboard) mengetik di sini lalu Enter */}
       <input
         ref={hardwareInputRef}
         type="text"
         autoComplete="off"
         aria-label="Input scanner barcode"
-        className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
+        className="sr-only fixed top-0 left-0 w-px h-px opacity-0"
         onKeyDown={handleHardwareKeyDown}
+        onBlur={() => {
+          if (!processingRef.current) focusHardwareInput();
+        }}
       />
 
-      {/* Instructions */}
-      <div className="absolute top-16 left-0 right-0 text-center z-30 px-4">
-        <div className="inline-block bg-black/50 backdrop-blur-sm text-white text-xs px-4 py-2 rounded-full font-medium">
-          Scan dengan alat scanner atau arahkan barcode ke kamera
+      {/* Mode info card + status */}
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 shadow-sm">
+        <div className="max-w-2xl mx-auto px-4 pt-3 pb-3">
+          <div
+            className={`rounded-xl border shadow-sm overflow-hidden ${
+              mode === "validation"
+                ? "bg-white border-indigo-200"
+                : "bg-white border-green-200"
+            }`}
+          >
+            <div
+              className={`px-4 py-3 flex items-center gap-3 ${
+                mode === "validation" ? "bg-indigo-50" : "bg-green-50"
+              }`}
+            >
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  mode === "validation"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-green-600 text-white"
+                }`}
+              >
+                {mode === "validation" ? (
+                  <ClipboardCheck className="w-5 h-5" />
+                ) : (
+                  <Scan className="w-5 h-5" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <h2
+                  className={`text-sm font-bold ${
+                    mode === "validation" ? "text-indigo-700" : "text-green-700"
+                  }`}
+                >
+                  {mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
+                </h2>
+                <p className="text-xs text-gray-600 mt-0.5 leading-snug">
+                  {mode === "validation"
+                    ? "Scan barcode kemasan untuk validasi resep"
+                    : "Scan barcode untuk pencatatan pemberian obat"}
+                </p>
+              </div>
+            </div>
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2 text-sm border-t border-gray-100 bg-white">
+              <span className="flex items-center gap-1.5 text-gray-600">
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                    Siap scan
+                  </>
+                )}
+              </span>
+              <span className="text-gray-500 text-xs">
+                {successCount} berhasil
+                {listScope === "current_mode"
+                  ? ` · ${mode === "validation" ? "validasi" : "pemberian"}`
+                  : ""}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Scanner Container */}
-      <div className="flex-1 relative overflow-hidden">
-        {isCameraActive && (
-          <video
-            ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
-            autoPlay
-            playsInline
-            muted
-          />
-        )}
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed top-20 left-4 right-4 z-50 max-w-2xl mx-auto px-4 py-3 rounded-xl shadow-lg border flex items-start gap-3 ${
+            toast.type === "success"
+              ? "bg-green-50 border-green-200 text-green-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+          role="status"
+        >
+          {toast.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+          ) : (
+            <XCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-sm">{toast.message}</p>
+            {toast.code && (
+              <p className="font-mono text-xs mt-0.5 truncate">{toast.code}</p>
+            )}
+          </div>
+        </div>
+      )}
 
-        <canvas ref={canvasRef} className="hidden" />
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col min-h-0">
+        {/* Date & list filters */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => {
+              setIsTodayFilter(true);
+              setFilterDate(getTodayDateString());
+            }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+              isTodayFilter
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-gray-600 border-gray-200 hover:border-indigo-300"
+            }`}
+          >
+            Hari ini
+          </button>
+          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-white border-gray-200 cursor-pointer hover:border-indigo-300">
+            <Calendar className="w-3.5 h-3.5 text-gray-500" />
+            <input
+              type="date"
+              value={isTodayFilter ? "" : filterDate}
+              max={getTodayDateString()}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setFilterDate(e.target.value);
+                  setIsTodayFilter(e.target.value === getTodayDateString());
+                }
+              }}
+              className="bg-transparent border-0 p-0 text-xs w-[7.5rem] cursor-pointer"
+            />
+          </label>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() =>
+              setListScope((s) => (s === "all" ? "current_mode" : "all"))
+            }
+            className="px-3 py-1.5 rounded-full text-xs font-medium border bg-white border-gray-200 text-gray-600 hover:border-indigo-300"
+          >
+            {listScope === "all" ? "Semua mode" : "Mode ini saja"}
+          </button>
+          <button
+            type="button"
+            onClick={() => fetchHistory()}
+            disabled={isLoadingHistory}
+            className="p-1.5 rounded-full bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50"
+            aria-label="Refresh riwayat"
+          >
+            <RefreshCw
+              className={`w-4 h-4 text-indigo-600 ${isLoadingHistory ? "animate-spin" : ""}`}
+            />
+          </button>
+        </div>
 
-        {/* Overlay with scan area */}
-        {cameraReady && !scanSuccess && !scanError && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-            <div className="relative w-64 h-64 rounded-2xl border-4 border-white/30 shadow-2xl">
-              {/* Corner decorations */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-2xl"></div>
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-2xl"></div>
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-2xl"></div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-2xl"></div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-gray-700">
+            {formatDateLabel(filterDate)}
+          </h2>
+          <Link
+            href="/history"
+            className="text-xs text-indigo-600 hover:underline font-medium"
+          >
+            Riwayat lengkap
+          </Link>
+        </div>
 
-              {/* Scanning line animation */}
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-white to-transparent animate-scan-line"></div>
+        {/* List */}
+        <div className="flex-1 overflow-y-auto space-y-2 pb-4 min-h-[200px]">
+          {isLoadingHistory && displayRows.length === 0 && (
+            <div className="flex flex-col items-center py-12 text-gray-500">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-3" />
+              <p className="text-sm">Memuat riwayat...</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Loading state */}
-        {!cameraReady && !scanError && !scanSuccess && (
-          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-white mb-4"></div>
-            <p className="text-white text-lg font-medium">Menyiapkan kamera...</p>
-            <p className="text-white/60 text-sm mt-2">Mohon tunggu sebentar</p>
-          </div>
-        )}
-
-        {/* Processing overlay */}
-        {isProcessing && !scanSuccess && !scanError && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 shadow-xl">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-indigo-600 mx-auto mb-3"></div>
-              <p className="text-gray-800 font-medium">Memproses...</p>
+          {!isLoadingHistory && displayRows.length === 0 && (
+            <div className="text-center py-12 px-4 bg-white rounded-xl border border-dashed border-gray-200">
+              <Scan className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-600 font-medium text-sm">
+                Belum ada scan pada tanggal ini
+              </p>
+              <p className="text-gray-400 text-xs mt-1">
+                Arahkan barcode ke scanner — hasil muncul di sini
+              </p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Error state */}
-        {scanError && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
-            <div className="w-full max-w-sm p-6 bg-white rounded-2xl shadow-2xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+          {displayRows.map((row) => (
+            <div
+              key={row.id}
+              className={`bg-white rounded-xl border p-3 shadow-sm ${
+                row.status === "error"
+                  ? "border-red-200 bg-red-50/50"
+                  : row.status === "processing"
+                    ? "border-indigo-200"
+                    : row.mode === "validation"
+                      ? "border-indigo-100"
+                      : "border-green-100"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                    row.status === "error"
+                      ? "bg-red-100"
+                      : row.status === "processing"
+                        ? "bg-indigo-100"
+                        : row.mode === "validation"
+                          ? "bg-indigo-100"
+                          : "bg-green-100"
+                  }`}
+                >
+                  {row.status === "processing" ? (
+                    <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                  ) : row.status === "error" ? (
+                    <XCircle className="w-4 h-4 text-red-600" />
+                  ) : row.mode === "validation" ? (
+                    <ClipboardCheck className="w-4 h-4 text-indigo-600" />
+                  ) : (
+                    <Scan className="w-4 h-4 text-green-600" />
+                  )}
                 </div>
-                <p className="font-bold text-red-700 text-lg">Scan Gagal</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <span
+                      className={`text-xs font-semibold ${
+                        row.mode === "validation"
+                          ? "text-indigo-600"
+                          : "text-green-600"
+                      }`}
+                    >
+                      {row.mode === "validation"
+                        ? "Validasi Kemasan"
+                        : "Pemberian Obat"}
+                    </span>
+                    <span className="text-xs text-gray-400 shrink-0">
+                      {formatTime(row.timestamp)}
+                    </span>
+                  </div>
+                  <p className="font-mono text-sm text-gray-800 break-all">
+                    {row.code}
+                  </p>
+                  {row.status === "error" && row.message && (
+                    <p className="text-xs text-red-600 mt-1">{row.message}</p>
+                  )}
+                </div>
               </div>
-              <p className="text-gray-700 mb-6 leading-relaxed">{scanError}</p>
-              <button
-                onClick={handleRetryScan}
-                className="w-full px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold shadow-lg"
-              >
-                Coba Lagi
-              </button>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      </main>
 
-        {/* Success state */}
-        {scanSuccess && lastScanData && (
-          <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
-            <div className="w-full max-w-sm p-6 bg-white rounded-2xl shadow-2xl">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="w-7 h-7 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <p className="font-bold text-green-700 text-lg">Scan Berhasil!</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-green-100">
-                <p className="text-xs text-gray-600 font-semibold mb-2">Kode Scan:</p>
-                <p className="font-mono text-sm bg-white p-3 rounded-lg break-all border-2 border-green-200 text-green-700 font-semibold">
-                  {lastScanData}
-                </p>
-              </div>
-              <button
-                onClick={handleRetryScan}
-                className="w-full px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-semibold shadow-lg"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Mode selector */}
-        {cameraReady && !scanSuccess && !scanError && (
-          <div className="absolute left-0 bottom-50 right-0 flex justify-center items-center z-40 px-4">
-            <div className="w-full max-w-md flex bg-white/95 backdrop-blur-sm rounded-2xl p-1 shadow-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setScanMode("validation");
-                  router.push("/scanner?mode=validation");
-                }}
-                className={`flex-1 py-3 px-4 font-semibold text-sm transition-all duration-200 rounded-xl ${
-                  mode === "validation"
-                    ? "bg-indigo-600 text-white shadow-lg"
-                    : "text-indigo-600 hover:bg-indigo-50"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <ClipboardCheck className="w-5 h-5" />
-                  <span>Validasi</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScanMode("dispensing");
-                  router.push("/scanner?mode=dispensing");
-                }}
-                className={`flex-1 py-3 px-4 font-semibold text-sm transition-all duration-200 rounded-xl ${
-                  mode === "dispensing"
-                    ? "bg-green-600 text-white shadow-lg"
-                    : "text-green-600 hover:bg-green-50"
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Scan className="w-5 h-5" />
-                  <span>Pemberian</span>
-                </div>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Navigation */}
-      <div className="absolute bottom-0 left-0 right-0 z-30">
-        <BottomNavigation />
-      </div>
-
-      <style jsx global>{`
-        @keyframes scan-line {
-          0% {
-            top: 0;
-          }
-          100% {
-            top: 100%;
-          }
-        }
-
-        .animate-scan-line {
-          animation: scan-line 2s ease-in-out infinite;
-        }
-
-        html, body {
-          touch-action: pan-y pan-x;
-          -webkit-touch-callout: none;
-          -webkit-user-select: none;
-          user-select: none;
-          overflow: hidden;
-        }
-
-        video {
-          object-fit: cover !important;
-          width: 100% !important;
-          height: 100% !important;
-        }
-      `}</style>
+      <BottomNavigation />
     </div>
   );
 };

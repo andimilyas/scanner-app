@@ -17,14 +17,14 @@ export default function LoginPage() {
   useEffect(() => {
     if (isHydrated && isLoggedIn) {
       console.log('Redirecting to home from login');
-      router.push("/home");
+      router.push("/scanner?mode=validation");
     }
   }, [isHydrated, isLoggedIn, router]);
 
   // Redirect to home if already logged in (only after hydration)
   useEffect(() => {
     if (isHydrated && localStorage.getItem('scanner_app_session')) {
-      router.push("/home");
+      router.push("/scanner?mode=validation");
     }
   }, [isHydrated, router]);
 
@@ -59,7 +59,7 @@ export default function LoginPage() {
         setIsLoggedIn(true);
         setUser(result.user);
         setScanResult(null);
-        router.push("/home");
+        router.push("/scanner?mode=validation");
       } else {
         setFormError(result.message || "Login gagal");
       }
