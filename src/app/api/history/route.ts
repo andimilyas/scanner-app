@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSimartDB } from "@/app/lib/db";
+import { parseSqlServerLocalDateTime } from "@/app/lib/datetime";
 import type { NextRequest } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -45,8 +46,8 @@ export async function GET(req: NextRequest) {
       // Add validation entry if exists for this user
       if (record.valid_kemasan_at && record.valid_kemasan_by === userNoAbsen) {
         try {
-          const validDate = new Date(record.valid_kemasan_at);
-          if (!isNaN(validDate.getTime())) {
+          const validDate = parseSqlServerLocalDateTime(record.valid_kemasan_at);
+          if (validDate) {
             items.push({
               id: `${record.code}-validation-${validDate.getTime()}`,
               code: record.code,
@@ -70,8 +71,8 @@ export async function GET(req: NextRequest) {
           // Determine base date: prefer valid_kemasan_at, fallback to today
           let baseDate = new Date();
           if (record.valid_kemasan_at) {
-            const vd = new Date(record.valid_kemasan_at);
-            if (!isNaN(vd.getTime())) {
+            const vd = parseSqlServerLocalDateTime(record.valid_kemasan_at);
+            if (vd) {
               baseDate = vd;
             }
           }

@@ -41,6 +41,7 @@ const ScannerContent: React.FC = () => {
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const processingRef = useRef<boolean>(false);
   const mountedRef = useRef<boolean>(true);
+  const hardwareInputRef = useRef<HTMLInputElement>(null);
 
   // Prevent zoom on mobile
   useEffect(() => {
@@ -343,6 +344,24 @@ const ScannerContent: React.FC = () => {
     [processScan, isProcessing]
   );
 
+  const focusHardwareInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      hardwareInputRef.current?.focus();
+    });
+  }, []);
+
+  const handleHardwareKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (processingRef.current || scanSuccess) return;
+    if (e.key !== "Enter") return;
+
+    e.preventDefault();
+    const code = e.currentTarget.value.trim();
+    e.currentTarget.value = "";
+    if (code.length > 0) {
+      void processScan(code);
+    }
+  };
+
   const handleRetryScan = () => {
     setScanError(null);
     setScanSuccess(false);
@@ -354,6 +373,7 @@ const ScannerContent: React.FC = () => {
     // Pastikan pemindaian berjalan kembali
     // Mulai ulang kamera agar interval scanning aktif lagi
     startCamera();
+    focusHardwareInput();
   };
 
   // const toggleCamera = () => {
@@ -364,6 +384,13 @@ const ScannerContent: React.FC = () => {
   //   }, 100);
   // };
 
+  // Keep focus for USB/HID barcode scanner (types like keyboard + Enter)
+  useEffect(() => {
+    if (isHydrated && isLoggedIn && !scanSuccess && !scanError) {
+      focusHardwareInput();
+    }
+  }, [isHydrated, isLoggedIn, mode, scanSuccess, scanError, focusHardwareInput]);
+
   // Initialize camera
   useEffect(() => {
     mountedRef.current = true;
@@ -372,6 +399,7 @@ const ScannerContent: React.FC = () => {
       const timer = setTimeout(() => {
         if (mountedRef.current) {
           startCamera();
+          focusHardwareInput();
         }
       }, 300);
 
@@ -383,7 +411,7 @@ const ScannerContent: React.FC = () => {
     return () => {
       mountedRef.current = false;
     };
-  }, [isHydrated, isLoggedIn, startCamera]);
+  }, [isHydrated, isLoggedIn, startCamera, focusHardwareInput]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -498,10 +526,20 @@ const ScannerContent: React.FC = () => {
         </div>
       </div>
 
+      {/* Hidden input: USB scanner (HID keyboard) mengetik di sini lalu Enter */}
+      <input
+        ref={hardwareInputRef}
+        type="text"
+        autoComplete="off"
+        aria-label="Input scanner barcode"
+        className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
+        onKeyDown={handleHardwareKeyDown}
+      />
+
       {/* Instructions */}
       <div className="absolute top-16 left-0 right-0 text-center z-30 px-4">
         <div className="inline-block bg-black/50 backdrop-blur-sm text-white text-xs px-4 py-2 rounded-full font-medium">
-          Arahkan barcode ke dalam kotak
+          Scan dengan alat scanner atau arahkan barcode ke kamera
         </div>
       </div>
 
