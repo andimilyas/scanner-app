@@ -15,8 +15,10 @@ import {
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import { isTouchPrimaryDevice, isEditableInputTarget } from "@/app/lib/device";
 
 const LAST_MODE_KEY = "scanner_last_mode";
+const SCANNER_KEY_GAP_MS = 100;
 
 type ScanMode = "validation" | "dispensing";
 
@@ -108,6 +110,10 @@ const WorkstationContent: React.FC = () => {
   const lastScannedRef = useRef<string>("");
   const processingRef = useRef<boolean>(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scannerBufferRef = useRef("");
+  const lastScannerKeyRef = useRef(0);
+  /** Default true: jangan autofocus sampai tahu perangkat (cegah keyboard di HP). */
+  const [isTouchDevice, setIsTouchDevice] = useState(true);
 
   const showToast = useCallback(
     (t: { type: "success" | "error"; message: string; code?: string }) => {
@@ -118,9 +124,14 @@ const WorkstationContent: React.FC = () => {
     []
   );
 
-  const focusHardwareInput = useCallback(() => {
-    requestAnimationFrame(() => hardwareInputRef.current?.focus());
+  useEffect(() => {
+    setIsTouchDevice(isTouchPrimaryDevice());
   }, []);
+
+  const focusHardwareInput = useCallback(() => {
+    if (isTouchDevice) return;
+    requestAnimationFrame(() => hardwareInputRef.current?.focus({ preventScroll: true }));
+  }, [isTouchDevice]);
 
   // Redirect if mode query missing
   useEffect(() => {
@@ -159,8 +170,8 @@ const WorkstationContent: React.FC = () => {
   }, [isHydrated, isLoggedIn, user?.no_absen, fetchHistory]);
 
   useEffect(() => {
-    if (isHydrated && isLoggedIn) focusHardwareInput();
-  }, [isHydrated, isLoggedIn, mode, isProcessing, focusHardwareInput]);
+    if (isHydrated && isLoggedIn && !isTouchDevice) focusHardwareInput();
+  }, [isHydrated, isLoggedIn, mode, isProcessing, isTouchDevice, focusHardwareInput]);
 
   useEffect(() => {
     return () => {
@@ -288,6 +299,38 @@ const WorkstationContent: React.FC = () => {
     if (code.length > 0) void processScan(code);
   };
 
+  // HP/tablet: tangkap scanner BT tanpa fokus input (tidak memunculkan keyboard)
+  useEffect(() => {
+    if (!isTouchDevice || !isHydrated || !isLoggedIn) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isEditableInputTarget(e.target)) return;
+      if (processingRef.current) return;
+
+      const now = Date.now();
+      if (e.key === "Enter") {
+        const code = scannerBufferRef.current.trim();
+        scannerBufferRef.current = "";
+        if (code.length > 0) {
+          e.preventDefault();
+          void processScan(code);
+        }
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (now - lastScannerKeyRef.current > SCANNER_KEY_GAP_MS) {
+          scannerBufferRef.current = "";
+        }
+        lastScannerKeyRef.current = now;
+        scannerBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isTouchDevice, isHydrated, isLoggedIn, processScan]);
+
   const apiForDate = apiHistory.filter(
     (item) => toDateString(item.timestamp) === filterDate
   );
@@ -332,11 +375,19 @@ const WorkstationContent: React.FC = () => {
         ref={hardwareInputRef}
         type="text"
         autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        inputMode="none"
+        readOnly={isTouchDevice}
+        tabIndex={-1}
+        data-scanner-input="true"
+        aria-hidden={isTouchDevice}
         aria-label="Input scanner barcode"
-        className="sr-only fixed top-0 left-0 w-px h-px opacity-0"
+        className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
         onKeyDown={handleHardwareKeyDown}
         onBlur={() => {
-          if (!processingRef.current) focusHardwareInput();
+          if (!processingRef.current && !isTouchDevice) focusHardwareInput();
         }}
       />
 
