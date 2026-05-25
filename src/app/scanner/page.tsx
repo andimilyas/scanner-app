@@ -20,6 +20,12 @@ import Link from "next/link";
 import CameraBarcodeScanner from "@/components/CameraBarcodeScanner";
 import { isTouchPrimaryDevice, isEditableInputTarget } from "@/app/lib/device";
 import {
+  SCAN_DEDUP_MS,
+  isScanTerminator,
+  appendScannerChar,
+  flushScannerBuffer,
+} from "@/app/lib/hardware-scanner";
+import {
   LAST_MODE_KEY,
   LAST_INPUT_KEY,
   buildScannerUrl,
@@ -29,9 +35,7 @@ import {
   type ScanInput,
 } from "@/app/lib/scanner-nav";
 
-const SCANNER_KEY_GAP_MS = 100;
-/** Cegah double-scan dari alat; per mode + barcode (bukan global). */
-const SCAN_DEDUP_MS = 2000;
+const MIN_BARCODE_LENGTH = 4;
 
 interface ApiHistoryItem {
   id: string;
@@ -127,6 +131,8 @@ const WorkstationContent: React.FC = () => {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBufferRef = useRef("");
   const lastScannerKeyRef = useRef(0);
+  const pendingScanRef = useRef<string | null>(null);
+  const processScanRef = useRef<(data: string) => void>(() => {});
   /** Default true: jangan autofocus sampai tahu perangkat (cegah keyboard di HP). */
   const [isTouchDevice, setIsTouchDevice] = useState(true);
 
@@ -227,9 +233,15 @@ const WorkstationContent: React.FC = () => {
 
   const processScan = useCallback(
     async (data: string) => {
-      if (processingRef.current || isProcessing) return;
+      const trimmed = data.trim();
+      if (!trimmed) return;
 
-      const dedupKey = `${mode}:${data.trim()}`;
+      if (processingRef.current) {
+        pendingScanRef.current = trimmed;
+        return;
+      }
+
+      const dedupKey = `${mode}:${trimmed}`;
       const last = lastScanDedupRef.current;
       if (
         last?.key === dedupKey &&
@@ -239,6 +251,16 @@ const WorkstationContent: React.FC = () => {
       }
       lastScanDedupRef.current = { key: dedupKey, at: Date.now() };
 
+      if (trimmed.length < MIN_BARCODE_LENGTH) {
+        showToast({
+          type: "error",
+          message: "Barcode tidak lengkap. Scan ulang.",
+          code: trimmed,
+        });
+        lastScanDedupRef.current = null;
+        return;
+      }
+
       processingRef.current = true;
       setIsProcessing(true);
 
@@ -246,7 +268,7 @@ const WorkstationContent: React.FC = () => {
       setLiveEntries((prev) => [
         {
           id: processingId,
-          code: data,
+          code: trimmed,
           mode,
           timestamp: Date.now(),
           status: "processing",
@@ -255,14 +277,14 @@ const WorkstationContent: React.FC = () => {
       ]);
 
       try {
-        setScanResult(data);
+        setScanResult(trimmed);
         setScanMode(mode);
 
         const response = await fetch("/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            code: data,
+            code: trimmed,
             mode,
             user: user?.no_absen || "",
           }),
@@ -285,7 +307,7 @@ const WorkstationContent: React.FC = () => {
           setLiveEntries((prev) => [
             {
               id: `err-${Date.now()}`,
-              code: data,
+              code: trimmed,
               mode,
               timestamp: Date.now(),
               status: "error",
@@ -293,7 +315,7 @@ const WorkstationContent: React.FC = () => {
             },
             ...prev,
           ]);
-          showToast({ type: "error", message: errorMsg, code: data });
+          showToast({ type: "error", message: errorMsg, code: trimmed });
           lastScanDedupRef.current = null;
           return;
         }
@@ -304,7 +326,7 @@ const WorkstationContent: React.FC = () => {
             mode === "validation"
               ? "Validasi berhasil"
               : "Pemberian obat tercatat",
-          code: data,
+          code: trimmed,
         });
         await fetchHistory();
       } catch {
@@ -312,7 +334,7 @@ const WorkstationContent: React.FC = () => {
         setLiveEntries((prev) => [
           {
             id: `err-${Date.now()}`,
-            code: data,
+            code: trimmed,
             mode,
             timestamp: Date.now(),
             status: "error",
@@ -323,13 +345,21 @@ const WorkstationContent: React.FC = () => {
         showToast({
           type: "error",
           message: "Terjadi kesalahan koneksi.",
-          code: data,
+          code: trimmed,
         });
         lastScanDedupRef.current = null;
       } finally {
         processingRef.current = false;
         setIsProcessing(false);
-        if (isHardwareInput) focusHardwareInput();
+        if (hardwareInputRef.current) hardwareInputRef.current.value = "";
+
+        const pending = pendingScanRef.current;
+        pendingScanRef.current = null;
+        if (pending) {
+          queueMicrotask(() => processScanRef.current(pending));
+        } else if (isHardwareInput) {
+          focusHardwareInput();
+        }
       }
     },
     [
@@ -337,7 +367,6 @@ const WorkstationContent: React.FC = () => {
       user,
       setScanMode,
       setScanResult,
-      isProcessing,
       showToast,
       fetchHistory,
       focusHardwareInput,
@@ -345,22 +374,25 @@ const WorkstationContent: React.FC = () => {
     ]
   );
 
-  const handleHardwareKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (processingRef.current) return;
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    const code = e.currentTarget.value.trim();
-    e.currentTarget.value = "";
-    if (code.length > 0) void processScan(code);
-  };
+  useEffect(() => {
+    processScanRef.current = (data: string) => {
+      void processScan(data);
+    };
+  }, [processScan]);
+
+  const submitHardwareScan = useCallback(
+    (raw: string) => {
+      const code = flushScannerBuffer(raw);
+      if (code.length > 0) void processScan(code);
+    },
+    [processScan]
+  );
 
   // Alat scanner (PC & HP): tangkap keystroke global — tetap jalan meski fokus di tombol nav
   useEffect(() => {
     if (!isHardwareInput || !isHydrated || !isLoggedIn) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (processingRef.current) return;
-
       const target = e.target;
       const isScannerInput =
         target instanceof HTMLInputElement &&
@@ -369,18 +401,21 @@ const WorkstationContent: React.FC = () => {
       if (isEditableInputTarget(target) && !isScannerInput) return;
 
       const now = Date.now();
-      if (e.key === "Enter") {
+
+      if (isScanTerminator(e.key)) {
         let code = "";
         if (isScannerInput && target instanceof HTMLInputElement) {
-          code = target.value.trim();
+          code = flushScannerBuffer(target.value);
           target.value = "";
         } else {
-          code = scannerBufferRef.current.trim();
+          code = flushScannerBuffer(scannerBufferRef.current);
           scannerBufferRef.current = "";
         }
+        lastScannerKeyRef.current = now;
         if (code.length > 0) {
           e.preventDefault();
-          void processScan(code);
+          e.stopPropagation();
+          submitHardwareScan(code);
         }
         return;
       }
@@ -388,17 +423,20 @@ const WorkstationContent: React.FC = () => {
       if (isScannerInput) return;
 
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (now - lastScannerKeyRef.current > SCANNER_KEY_GAP_MS) {
-          scannerBufferRef.current = "";
-        }
-        lastScannerKeyRef.current = now;
-        scannerBufferRef.current += e.key;
+        const next = appendScannerChar(
+          scannerBufferRef.current,
+          e.key,
+          lastScannerKeyRef.current,
+          now
+        );
+        scannerBufferRef.current = next.buffer;
+        lastScannerKeyRef.current = next.lastKeyAt;
       }
     };
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [isHardwareInput, isHydrated, isLoggedIn, processScan]);
+  }, [isHardwareInput, isHydrated, isLoggedIn, submitHardwareScan]);
 
   const apiForDate = apiHistory.filter(
     (item) => toDateString(item.timestamp) === filterDate
@@ -455,7 +493,6 @@ const WorkstationContent: React.FC = () => {
           aria-hidden={isTouchDevice}
           aria-label="Input scanner barcode"
           className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
-          onKeyDown={handleHardwareKeyDown}
           onBlur={() => {
             if (!processingRef.current && !isTouchDevice) focusHardwareInput();
           }}
