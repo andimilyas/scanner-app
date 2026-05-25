@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
+import { buildScannerUrl, defaultScanInput } from "@/app/lib/scanner-nav";
 
 export default function RootPage() {
   const { isHydrated } = useApp();
@@ -15,7 +16,7 @@ export default function RootPage() {
         try {
           const sessionData = JSON.parse(savedSession);
           if (sessionData.isLoggedIn && sessionData.user) {
-            router.push("/scanner?mode=validation");
+            router.push(buildScannerUrl("validation", defaultScanInput()));
             return;
           }
         } catch (error) {

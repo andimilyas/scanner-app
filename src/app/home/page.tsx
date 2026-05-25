@@ -3,8 +3,15 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
-
-const LAST_MODE_KEY = "scanner_last_mode";
+import {
+  buildScannerUrl,
+  defaultScanInput,
+  LAST_MODE_KEY,
+  LAST_INPUT_KEY,
+  parseScanInput,
+  type ScanMode,
+  type ScanInput,
+} from "@/app/lib/scanner-nav";
 
 export default function HomePage() {
   const { isHydrated, isLoggedIn } = useApp();
@@ -16,9 +23,12 @@ export default function HomePage() {
       router.replace("/login");
       return;
     }
-    const saved = sessionStorage.getItem(LAST_MODE_KEY);
-    const mode = saved === "dispensing" ? "dispensing" : "validation";
-    router.replace(`/scanner?mode=${mode}`);
+    const savedMode = sessionStorage.getItem(LAST_MODE_KEY);
+    const mode: ScanMode = savedMode === "dispensing" ? "dispensing" : "validation";
+    const savedInput = sessionStorage.getItem(LAST_INPUT_KEY);
+    const input: ScanInput =
+      parseScanInput(savedInput) ?? defaultScanInput();
+    router.replace(buildScannerUrl(mode, input));
   }, [isHydrated, isLoggedIn, router]);
 
   return (

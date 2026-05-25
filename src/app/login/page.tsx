@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/app/context/AppContext";
 import Image from "next/image";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { buildScannerUrl, defaultScanInput } from "@/app/lib/scanner-nav";
 
 export default function LoginPage() {
   const { setIsLoggedIn, setScanResult, setUser, isHydrated, isLoggedIn } = useApp();
@@ -17,14 +18,14 @@ export default function LoginPage() {
   useEffect(() => {
     if (isHydrated && isLoggedIn) {
       console.log('Redirecting to home from login');
-      router.push("/scanner?mode=validation");
+      router.push(buildScannerUrl("validation", defaultScanInput()));
     }
   }, [isHydrated, isLoggedIn, router]);
 
   // Redirect to home if already logged in (only after hydration)
   useEffect(() => {
     if (isHydrated && localStorage.getItem('scanner_app_session')) {
-      router.push("/scanner?mode=validation");
+      router.push(buildScannerUrl("validation", defaultScanInput()));
     }
   }, [isHydrated, router]);
 
@@ -59,7 +60,7 @@ export default function LoginPage() {
         setIsLoggedIn(true);
         setUser(result.user);
         setScanResult(null);
-        router.push("/scanner?mode=validation");
+        router.push(buildScannerUrl("validation", defaultScanInput()));
       } else {
         setFormError(result.message || "Login gagal");
       }

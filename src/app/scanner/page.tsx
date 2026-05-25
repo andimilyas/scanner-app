@@ -13,14 +13,23 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Camera,
+  ScanBarcode,
 } from "lucide-react";
 import Link from "next/link";
+import CameraBarcodeScanner from "@/components/CameraBarcodeScanner";
 import { isTouchPrimaryDevice, isEditableInputTarget } from "@/app/lib/device";
+import {
+  LAST_MODE_KEY,
+  LAST_INPUT_KEY,
+  buildScannerUrl,
+  defaultScanInput,
+  parseScanInput,
+  type ScanMode,
+  type ScanInput,
+} from "@/app/lib/scanner-nav";
 
-const LAST_MODE_KEY = "scanner_last_mode";
 const SCANNER_KEY_GAP_MS = 100;
-
-type ScanMode = "validation" | "dispensing";
 
 interface ApiHistoryItem {
   id: string;
@@ -91,7 +100,11 @@ const WorkstationContent: React.FC = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const paramMode = searchParams.get("mode");
+  const paramInput = searchParams.get("input");
   const mode: ScanMode = paramMode === "dispensing" ? "dispensing" : "validation";
+  const scanInput: ScanInput = parseScanInput(paramInput) ?? defaultScanInput();
+  const isHardwareInput = scanInput === "hardware";
+  const isCameraInput = scanInput === "camera";
   const { setScanResult, setScanMode, user, isLoggedIn, isHydrated } = useApp();
   const [apiHistory, setApiHistory] = useState<ApiHistoryItem[]>([]);
   const [liveEntries, setLiveEntries] = useState<LiveEntry[]>([]);
@@ -133,17 +146,32 @@ const WorkstationContent: React.FC = () => {
     requestAnimationFrame(() => hardwareInputRef.current?.focus({ preventScroll: true }));
   }, [isTouchDevice]);
 
-  // Redirect if mode query missing
+  const setScanInput = useCallback(
+    (input: ScanInput) => {
+      sessionStorage.setItem(LAST_INPUT_KEY, input);
+      router.replace(buildScannerUrl(mode, input), { scroll: false });
+    },
+    [mode, router]
+  );
+
+  // Redirect if query params missing
   useEffect(() => {
-    if (paramMode !== "validation" && paramMode !== "dispensing") {
-      const saved = sessionStorage.getItem(LAST_MODE_KEY);
-      const initial: ScanMode = saved === "dispensing" ? "dispensing" : "validation";
-      router.replace(`/scanner?mode=${initial}`, { scroll: false });
+    const modeOk = paramMode === "validation" || paramMode === "dispensing";
+    const inputOk = parseScanInput(paramInput) !== null;
+    if (!modeOk || !inputOk) {
+      const savedMode = sessionStorage.getItem(LAST_MODE_KEY);
+      const savedInput = sessionStorage.getItem(LAST_INPUT_KEY);
+      const initialMode: ScanMode =
+        savedMode === "dispensing" ? "dispensing" : "validation";
+      const initialInput: ScanInput =
+        parseScanInput(savedInput) ?? defaultScanInput();
+      router.replace(buildScannerUrl(initialMode, initialInput), { scroll: false });
       return;
     }
     setScanMode(mode);
     sessionStorage.setItem(LAST_MODE_KEY, mode);
-  }, [paramMode, mode, setScanMode, router]);
+    sessionStorage.setItem(LAST_INPUT_KEY, scanInput);
+  }, [paramMode, paramInput, mode, scanInput, setScanMode, router]);
 
   useEffect(() => {
     if (isHydrated && !isLoggedIn) router.push("/login");
@@ -170,8 +198,18 @@ const WorkstationContent: React.FC = () => {
   }, [isHydrated, isLoggedIn, user?.no_absen, fetchHistory]);
 
   useEffect(() => {
-    if (isHydrated && isLoggedIn && !isTouchDevice) focusHardwareInput();
-  }, [isHydrated, isLoggedIn, mode, isProcessing, isTouchDevice, focusHardwareInput]);
+    if (isHydrated && isLoggedIn && isHardwareInput && !isTouchDevice) {
+      focusHardwareInput();
+    }
+  }, [
+    isHydrated,
+    isLoggedIn,
+    mode,
+    isProcessing,
+    isTouchDevice,
+    isHardwareInput,
+    focusHardwareInput,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -275,7 +313,7 @@ const WorkstationContent: React.FC = () => {
       } finally {
         processingRef.current = false;
         setIsProcessing(false);
-        focusHardwareInput();
+        if (isHardwareInput) focusHardwareInput();
       }
     },
     [
@@ -287,6 +325,7 @@ const WorkstationContent: React.FC = () => {
       showToast,
       fetchHistory,
       focusHardwareInput,
+      isHardwareInput,
     ]
   );
 
@@ -299,9 +338,9 @@ const WorkstationContent: React.FC = () => {
     if (code.length > 0) void processScan(code);
   };
 
-  // HP/tablet: tangkap scanner BT tanpa fokus input (tidak memunculkan keyboard)
+  // HP/tablet + alat scanner: tangkap BT tanpa fokus input (tidak memunculkan keyboard)
   useEffect(() => {
-    if (!isTouchDevice || !isHydrated || !isLoggedIn) return;
+    if (!isHardwareInput || !isTouchDevice || !isHydrated || !isLoggedIn) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (isEditableInputTarget(e.target)) return;
@@ -329,7 +368,7 @@ const WorkstationContent: React.FC = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isTouchDevice, isHydrated, isLoggedIn, processScan]);
+  }, [isHardwareInput, isTouchDevice, isHydrated, isLoggedIn, processScan]);
 
   const apiForDate = apiHistory.filter(
     (item) => toDateString(item.timestamp) === filterDate
@@ -355,7 +394,9 @@ const WorkstationContent: React.FC = () => {
   const displayRows =
     listScope === "current_mode"
       ? mergedRows.filter((r) => r.mode === mode)
-      : mergedRows;
+      : mergedRows;J-01-2605-0000377   
+      J-01-2605-0000377   
+      
 
   const successCount = displayRows.filter((r) => r.status === "success").length;
 
@@ -371,25 +412,27 @@ const WorkstationContent: React.FC = () => {
     <div className="flex flex-col min-h-screen bg-gray-50 pb-24">
       <Header title="Apotek RSUD Pasar Rebo" />
 
-      <input
-        ref={hardwareInputRef}
-        type="text"
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        inputMode="none"
-        readOnly={isTouchDevice}
-        tabIndex={-1}
-        data-scanner-input="true"
-        aria-hidden={isTouchDevice}
-        aria-label="Input scanner barcode"
-        className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
-        onKeyDown={handleHardwareKeyDown}
-        onBlur={() => {
-          if (!processingRef.current && !isTouchDevice) focusHardwareInput();
-        }}
-      />
+      {isHardwareInput && (
+        <input
+          ref={hardwareInputRef}
+          type="text"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          inputMode="none"
+          readOnly={isTouchDevice}
+          tabIndex={-1}
+          data-scanner-input="true"
+          aria-hidden={isTouchDevice}
+          aria-label="Input scanner barcode"
+          className="sr-only fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none"
+          onKeyDown={handleHardwareKeyDown}
+          onBlur={() => {
+            if (!processingRef.current && !isTouchDevice) focusHardwareInput();
+          }}
+        />
+      )}
 
       {/* Mode info card + status */}
       <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 shadow-sm">
@@ -428,9 +471,13 @@ const WorkstationContent: React.FC = () => {
                   {mode === "validation" ? "Validasi Kemasan" : "Pemberian Obat"}
                 </h2>
                 <p className="text-xs text-gray-600 mt-0.5 leading-snug">
-                  {mode === "validation"
-                    ? "Scan barcode kemasan untuk validasi resep"
-                    : "Scan barcode untuk pencatatan pemberian obat"}
+                  {isCameraInput
+                    ? mode === "validation"
+                      ? "Gunakan kamera HP untuk scan kemasan"
+                      : "Gunakan kamera HP untuk scan pemberian obat"
+                    : mode === "validation"
+                      ? "Gunakan alat scanner untuk validasi kemasan"
+                      : "Gunakan alat scanner untuk pencatatan pemberian"}
                 </p>
               </div>
             </div>
@@ -444,7 +491,7 @@ const WorkstationContent: React.FC = () => {
                 ) : (
                   <>
                     <span className="w-2 h-2 rounded-full bg-green-500" />
-                    Siap scan
+                    {isCameraInput ? "Siap scan (kamera)" : "Siap scan (alat)"}
                   </>
                 )}
               </span>
@@ -454,6 +501,36 @@ const WorkstationContent: React.FC = () => {
                   ? ` · ${mode === "validation" ? "validasi" : "pemberian"}`
                   : ""}
               </span>
+            </div>
+          </div>
+
+          {/* Cara scan */}
+          <div className="mt-3">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setScanInput("camera")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-lg transition ${
+                  isCameraInput
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-indigo-300"
+                }`}
+              >
+                <Camera className="w-4 h-4 shrink-0" />
+                Kamera HP
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanInput("hardware")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-lg transition ${
+                  isHardwareInput
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-gray-600 border border-gray-200 hover:border-indigo-300"
+                }`}
+              >
+                <ScanBarcode className="w-4 h-4 shrink-0" />
+                Alat Scanner
+              </button>
             </div>
           </div>
         </div>
@@ -484,6 +561,17 @@ const WorkstationContent: React.FC = () => {
       )}
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-4 flex flex-col min-h-0">
+        {isCameraInput && (
+          <div className="mb-4">
+            <CameraBarcodeScanner
+              active={isCameraInput && isHydrated && isLoggedIn}
+              onScan={(code) => void processScan(code)}
+              disabled={isProcessing}
+              accent={mode === "validation" ? "indigo" : "green"}
+            />
+          </div>
+        )}
+
         {/* Date & list filters */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <button
@@ -566,7 +654,9 @@ const WorkstationContent: React.FC = () => {
                 Belum ada scan pada tanggal ini
               </p>
               <p className="text-gray-400 text-xs mt-1">
-                Arahkan barcode ke scanner — hasil muncul di sini
+                {isCameraInput
+                  ? "Scan dengan kamera — hasil muncul di sini"
+                  : "Scan dengan alat scanner — hasil muncul di sini"}
               </p>
             </div>
           )}
