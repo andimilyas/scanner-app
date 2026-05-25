@@ -38,3 +38,18 @@ body {
 .camera-scan-line {
   animation: camera-scan-line 2s ease-in-out infinite;
 }
+
+/* Date picker: teks dd/mm/yyyy & nilai terpilih terbaca (terutama Chrome/Edge) */
+input[type="date"].date-input-readable,
+input[type="date"].date-input-readable::-webkit-datetime-edit,
+input[type="date"].date-input-readable::-webkit-datetime-edit-fields-wrapper,
+input[type="date"].date-input-readable::-webkit-datetime-edit-text,
+input[type="date"].date-input-readable::-webkit-datetime-edit-month-field,
+input[type="date"].date-input-readable::-webkit-datetime-edit-day-field,
+input[type="date"].date-input-readable::-webkit-datetime-edit-year-field {
+  color: #171717;
+}
+
+input[type="date"].date-input-readable {
+  color-scheme: light;
+}

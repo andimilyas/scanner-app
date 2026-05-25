@@ -30,6 +30,8 @@ import {
 } from "@/app/lib/scanner-nav";
 
 const SCANNER_KEY_GAP_MS = 100;
+/** Cegah double-scan dari alat; per mode + barcode (bukan global). */
+const SCAN_DEDUP_MS = 2000;
 
 interface ApiHistoryItem {
   id: string;
@@ -120,7 +122,7 @@ const WorkstationContent: React.FC = () => {
   } | null>(null);
 
   const hardwareInputRef = useRef<HTMLInputElement>(null);
-  const lastScannedRef = useRef<string>("");
+  const lastScanDedupRef = useRef<{ key: string; at: number } | null>(null);
   const processingRef = useRef<boolean>(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scannerBufferRef = useRef("");
@@ -197,17 +199,23 @@ const WorkstationContent: React.FC = () => {
     if (isHydrated && isLoggedIn && user?.no_absen) fetchHistory();
   }, [isHydrated, isLoggedIn, user?.no_absen, fetchHistory]);
 
+  // Reset state scan saat ganti Validasi ↔ Pemberian
   useEffect(() => {
+    lastScanDedupRef.current = null;
+    processingRef.current = false;
+    scannerBufferRef.current = "";
+    if (hardwareInputRef.current) hardwareInputRef.current.value = "";
+
     if (isHydrated && isLoggedIn && isHardwareInput && !isTouchDevice) {
-      focusHardwareInput();
+      const t = setTimeout(() => focusHardwareInput(), 200);
+      return () => clearTimeout(t);
     }
   }, [
+    mode,
     isHydrated,
     isLoggedIn,
-    mode,
-    isProcessing,
-    isTouchDevice,
     isHardwareInput,
+    isTouchDevice,
     focusHardwareInput,
   ]);
 
@@ -220,9 +228,17 @@ const WorkstationContent: React.FC = () => {
   const processScan = useCallback(
     async (data: string) => {
       if (processingRef.current || isProcessing) return;
-      if (data === lastScannedRef.current) return;
 
-      lastScannedRef.current = data;
+      const dedupKey = `${mode}:${data.trim()}`;
+      const last = lastScanDedupRef.current;
+      if (
+        last?.key === dedupKey &&
+        Date.now() - last.at < SCAN_DEDUP_MS
+      ) {
+        return;
+      }
+      lastScanDedupRef.current = { key: dedupKey, at: Date.now() };
+
       processingRef.current = true;
       setIsProcessing(true);
 
@@ -278,7 +294,7 @@ const WorkstationContent: React.FC = () => {
             ...prev,
           ]);
           showToast({ type: "error", message: errorMsg, code: data });
-          lastScannedRef.current = "";
+          lastScanDedupRef.current = null;
           return;
         }
 
@@ -309,7 +325,7 @@ const WorkstationContent: React.FC = () => {
           message: "Terjadi kesalahan koneksi.",
           code: data,
         });
-        lastScannedRef.current = "";
+        lastScanDedupRef.current = null;
       } finally {
         processingRef.current = false;
         setIsProcessing(false);
@@ -338,24 +354,38 @@ const WorkstationContent: React.FC = () => {
     if (code.length > 0) void processScan(code);
   };
 
-  // HP/tablet + alat scanner: tangkap BT tanpa fokus input (tidak memunculkan keyboard)
+  // Alat scanner (PC & HP): tangkap keystroke global — tetap jalan meski fokus di tombol nav
   useEffect(() => {
-    if (!isHardwareInput || !isTouchDevice || !isHydrated || !isLoggedIn) return;
+    if (!isHardwareInput || !isHydrated || !isLoggedIn) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isEditableInputTarget(e.target)) return;
       if (processingRef.current) return;
+
+      const target = e.target;
+      const isScannerInput =
+        target instanceof HTMLInputElement &&
+        target.dataset.scannerInput === "true";
+
+      if (isEditableInputTarget(target) && !isScannerInput) return;
 
       const now = Date.now();
       if (e.key === "Enter") {
-        const code = scannerBufferRef.current.trim();
-        scannerBufferRef.current = "";
+        let code = "";
+        if (isScannerInput && target instanceof HTMLInputElement) {
+          code = target.value.trim();
+          target.value = "";
+        } else {
+          code = scannerBufferRef.current.trim();
+          scannerBufferRef.current = "";
+        }
         if (code.length > 0) {
           e.preventDefault();
           void processScan(code);
         }
         return;
       }
+
+      if (isScannerInput) return;
 
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (now - lastScannerKeyRef.current > SCANNER_KEY_GAP_MS) {
@@ -366,9 +396,9 @@ const WorkstationContent: React.FC = () => {
       }
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isHardwareInput, isTouchDevice, isHydrated, isLoggedIn, processScan]);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [isHardwareInput, isHydrated, isLoggedIn, processScan]);
 
   const apiForDate = apiHistory.filter(
     (item) => toDateString(item.timestamp) === filterDate
@@ -598,7 +628,7 @@ const WorkstationContent: React.FC = () => {
                   setIsTodayFilter(e.target.value === getTodayDateString());
                 }
               }}
-              className="bg-transparent border-0 p-0 text-xs w-[7.5rem] cursor-pointer"
+              className="date-input-readable bg-transparent border-0 p-0 text-xs w-[7.5rem] cursor-pointer text-gray-900"
             />
           </label>
           <div className="flex-1" />

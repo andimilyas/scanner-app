@@ -84,7 +84,7 @@ function BottomNavigationInner() {
   const goToMode = (next: ScanMode) => {
     setScanMode(next);
     sessionStorage.setItem(LAST_MODE_KEY, next);
-    router.push(buildScannerUrl(next, activeInput));
+    router.replace(buildScannerUrl(next, activeInput));
   };
 
   const handleLogout = async () => {

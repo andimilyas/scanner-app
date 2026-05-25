@@ -358,7 +358,7 @@ function HistoryPage() {
                 type="date"
                 value={tempDate}
                 onChange={(e) => setTempDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                className="date-input-readable w-full px-3 py-2 border rounded-lg text-sm bg-white text-gray-900"
               />
               <div className="mt-4">
                 <label className="block text-sm text-gray-600 mb-2">Pilih mode</label>
