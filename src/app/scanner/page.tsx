@@ -394,9 +394,7 @@ const WorkstationContent: React.FC = () => {
   const displayRows =
     listScope === "current_mode"
       ? mergedRows.filter((r) => r.mode === mode)
-      : mergedRows;J-01-2605-0000377   
-      J-01-2605-0000377   
-      
+      : mergedRows;
 
   const successCount = displayRows.filter((r) => r.status === "success").length;
 
