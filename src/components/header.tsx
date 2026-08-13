@@ -45,8 +45,9 @@ const Header: React.FC<HeaderProps> = ({
     ) : (
       <div className="w-6" />
     )}
-    <h1 className="text-xl font-semibold text-gray-800 text-center flex-1">
-      {title}
+    <h1 className="w-full flex items-center justify-between">
+      <img src="/asset/logo/app.svg" alt="" className="w-24" />
+      <img src="/asset/logo/rs.svg" alt="" className="w-24" />
     </h1>
   </div>
 );
